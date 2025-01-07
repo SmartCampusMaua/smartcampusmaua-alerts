@@ -1,11 +1,11 @@
-name: mqtt-topic-rewrite-lns-chirpstackv4-workflow
+name: smartcampusmaua-alerts-whatsapp-workflow
 on:
   push:
     branches:
       - develop
 jobs:
-  check-application:  
-    name: deploy-job
+  check-application:
+    name: evse-job
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
