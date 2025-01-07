@@ -378,7 +378,7 @@ func main() {
 				}
 			}
 
-			// updateAlarmAlreadyPlayedOnSupabase(messages)
+			updateAlarmAlreadyPlayedOnSupabase(messages)
 		}
 	}
 }
