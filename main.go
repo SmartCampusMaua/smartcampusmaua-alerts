@@ -18,8 +18,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-
-	"github.com/joho/godotenv"
+	// "github.com/joho/godotenv"
 )
 
 type SmartLightFields struct {
@@ -117,10 +116,10 @@ func fetchSmartLight() ([]SmartLightData, error) {
 }
 
 func fetchUsers() ([]UserData, error) {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 	connStr := os.Getenv("supabaseConnection")
 
 	db, err := sql.Open("postgres", connStr)
@@ -177,10 +176,10 @@ func fetchUsers() ([]UserData, error) {
 }
 
 func updateAlarmAlreadyPlayedOnSupabase(messages []Message) {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 	connStr := os.Getenv("supabaseConnection")
 
 	db, err := sql.Open("postgres", connStr)
@@ -308,10 +307,10 @@ func main() {
 	for {
 		select {
 		case <-ticker.C:
-			err := godotenv.Load()
-			if err != nil {
-				log.Fatalf("Error loading .env file: %v", err)
-			}
+			// err := godotenv.Load()
+			// if err != nil {
+			// 	log.Fatalf("Error loading .env file: %v", err)
+			// }
 
 			accessToken := os.Getenv("ACCESS_TOKEN_META")
 			phoneNumberID := os.Getenv("PHONE_NUMBER_ID_META")
