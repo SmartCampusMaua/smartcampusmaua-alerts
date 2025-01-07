@@ -1,16 +1,14 @@
-name: ci-timeseries-api-workflow
+name: mqtt-topic-rewrite-lns-chirpstackv4-workflow
 on:
   push:
     branches:
       - develop
-
 jobs:
-  build:  
-    name: Build and Push Docker Image
+  check-application:  
+    name: deploy-job
     runs-on: ubuntu-latest
     steps:
-      - name: Git Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -24,9 +22,8 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           push: true
           tags: rogeriocassares/smartcampusmaua-alerts-whatsapp:0.1
-
