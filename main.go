@@ -6,7 +6,6 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"strings"
 	"unicode"
 
 	"crypto/tls"
@@ -21,6 +20,18 @@ import (
 
 	"github.com/joho/godotenv"
 )
+
+type Tags struct {
+	DeviceId     string `json:"deviceId"`
+	DeviceType   string `json:"deviceType"`
+	Direction    string `json:"direction"`
+	Host         string `json:"host"`
+	Origin       string `json:"origin"`
+	RxMac_0      string `json:"rxMac_0"`
+	TxCodeRate   string `json:"txCodeRate"`
+	TxModulation string `json:"txModulation"`
+	Type         string `json:"type"`
+}
 
 type SmartLightFields struct {
 	BatteryVoltage float64 `json:"batteryVoltage"`
@@ -42,28 +53,16 @@ type SmartLightFields struct {
 	TxSpreadFactor float64 `json:"txSpreadFactor"`
 }
 
-type SmartLightTags struct {
-	DeviceId     string `json:"deviceId"`
-	DeviceType   string `json:"deviceType"`
-	Direction    string `json:"direction"`
-	Host         string `json:"host"`
-	Origin       string `json:"origin"`
-	RxMac_0      string `json:"rxMac_0"`
-	TxCodeRate   string `json:"txCodeRate"`
-	TxModulation string `json:"txModulation"`
-	Type         string `json:"type"`
-}
-
 type SmartLightData struct {
 	Fields    SmartLightFields `json:"fields"`
 	Name      string           `json:"name"`
-	Tags      SmartLightTags   `json:"tags"`
+	Tags      Tags             `json:"tags"`
 	Timestamp float64          `json:"timestamp"`
 }
 
 func fetchSmartLight() ([]SmartLightData, error) {
 	// API URL
-	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/LNS/SmartLight/all?interval=300"
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/LNS/SmartLight/all?interval=30"
 
 	// Create a custom HTTP client that doesn't verify SSL certificates
 	client := &http.Client{
@@ -116,6 +115,333 @@ func fetchSmartLight() ([]SmartLightData, error) {
 	return uniqueData, nil
 }
 
+type WaterTankFields struct {
+	BoardVoltage   float64 `json:"boardVoltage"`
+	Data           string  `json:"data"`
+	Distance       float64 `json:"distance"`
+	FCnt           float64 `json:"fCnt"`
+	FPort          float64 `json:"fPort"`
+	RxAlt_0        float64 `json:"rxAlt_0"`
+	RxLat_0        float64 `json:"rxLat_0"`
+	RxLon_0        float64 `json:"rxLon_0"`
+	RxRssi_0       float64 `json:"rxRssi_0"`
+	RxSnr_0        float64 `json:"rxSnr_0"`
+	TxBandWidth    float64 `json:"txBandWidth"`
+	TxFrequency    float64 `json:"txFrequency"`
+	TxSpreadFactor float64 `json:"txSpreadFactor"`
+}
+
+type WaterTankData struct {
+	Fields    WaterTankFields `json:"fields"`
+	Name      string          `json:"name"`
+	Tags      Tags            `json:"tags"`
+	Timestamp float64         `json:"timestamp"`
+}
+
+func fetchWaterTank() ([]WaterTankData, error) {
+	// API URL
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/LNS/WaterTankLevel/all?interval=30"
+
+	// Create a custom HTTP client that doesn't verify SSL certificates
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Disable SSL verification
+			},
+		},
+		Timeout: 30 * time.Second, // Optional timeout for the request
+	}
+
+	// Make the HTTP GET request
+	response, err := client.Get(apiUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check for successful HTTP response status
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	}
+
+	// Read the response body
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Parse the JSON response into a slice of SmartLightData (since the response is an array)
+	var data []WaterTankData
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	// Remove duplicates based on DeviceId
+	uniqueData := make([]WaterTankData, 0)
+	seenDevices := make(map[string]bool)
+
+	for _, item := range data {
+		if !seenDevices[item.Tags.DeviceId] {
+			uniqueData = append(uniqueData, item)
+			seenDevices[item.Tags.DeviceId] = true
+		}
+	}
+
+	// Return the filtered data
+	return uniqueData, nil
+}
+
+type HydrometerFields struct {
+	BoardVoltage   float64 `json:"boardVoltage"`
+	Counter        float64 `json:"counter"`
+	Data           string  `json:"data"`
+	FCnt           float64 `json:"fCnt"`
+	FPort          float64 `json:"fPort"`
+	RxAlt_0        float64 `json:"rxAlt_0"`
+	RxLat_0        float64 `json:"rxLat_0"`
+	RxLon_0        float64 `json:"rxLon_0"`
+	RxRssi_0       float64 `json:"rxRssi_0"`
+	RxSnr_0        float64 `json:"rxSnr_0"`
+	TxBandWidth    float64 `json:"txBandWidth"`
+	TxFrequency    float64 `json:"txFrequency"`
+	TxSpreadFactor float64 `json:"txSpreadFactor"`
+}
+
+type HydrometerData struct {
+	Fields    HydrometerFields `json:"fields"`
+	Name      string           `json:"name"`
+	Tags      Tags             `json:"tags"`
+	Timestamp float64          `json:"timestamp"`
+}
+
+func fetchHydrometer() ([]HydrometerData, error) {
+	// API URL
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/LNS/Hydrometer/all?interval=30"
+
+	// Create a custom HTTP client that doesn't verify SSL certificates
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Disable SSL verification
+			},
+		},
+		Timeout: 30 * time.Second, // Optional timeout for the request
+	}
+
+	// Make the HTTP GET request
+	response, err := client.Get(apiUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check for successful HTTP response status
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	}
+
+	// Read the response body
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Parse the JSON response into a slice of SmartLightData (since the response is an array)
+	var data []HydrometerData
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	// Remove duplicates based on DeviceId
+	uniqueData := make([]HydrometerData, 0)
+	seenDevices := make(map[string]bool)
+
+	for _, item := range data {
+		if !seenDevices[item.Tags.DeviceId] {
+			uniqueData = append(uniqueData, item)
+			seenDevices[item.Tags.DeviceId] = true
+		}
+	}
+
+	// Return the filtered data
+	return uniqueData, nil
+}
+
+type EnergyMeterFields struct {
+	BoardVoltage   float64 `json:"boardVoltage"`
+	Data           string  `json:"data"`
+	FCnt           float64 `json:"fCnt"`
+	FPort          float64 `json:"fPort"`
+	ForwardEnergy  float64 `json:"forwardEnergy"`
+	ReverseEnergy  float64 `json:"reverseEnergy"`
+	RxAlt_0        float64 `json:"rxAlt_0"`
+	RxLat_0        float64 `json:"rxLat_0"`
+	RxLon_0        float64 `json:"rxLon_0"`
+	RxRssi_0       float64 `json:"rxRssi_0"`
+	RxSnr_0        float64 `json:"rxSnr_0"`
+	TxBandWidth    float64 `json:"txBandWidth"`
+	TxFrequency    float64 `json:"txFrequency"`
+	TxSpreadFactor float64 `json:"txSpreadFactor"`
+}
+
+type EnergyMeterData struct {
+	Fields    EnergyMeterFields `json:"fields"`
+	Name      string            `json:"name"`
+	Tags      Tags              `json:"tags"`
+	Timestamp float64           `json:"timestamp"`
+}
+
+func fetchEnergyMeter() ([]EnergyMeterData, error) {
+	// API URL
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/LNS/EnergyMeter/all?interval=30"
+
+	// Create a custom HTTP client that doesn't verify SSL certificates
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Disable SSL verification
+			},
+		},
+		Timeout: 30 * time.Second, // Optional timeout for the request
+	}
+
+	// Make the HTTP GET request
+	response, err := client.Get(apiUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check for successful HTTP response status
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	}
+
+	// Read the response body
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Parse the JSON response into a slice of SmartLightData (since the response is an array)
+	var data []EnergyMeterData
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	// Remove duplicates based on DeviceId
+	uniqueData := make([]EnergyMeterData, 0)
+	seenDevices := make(map[string]bool)
+
+	for _, item := range data {
+		if !seenDevices[item.Tags.DeviceId] {
+			uniqueData = append(uniqueData, item)
+			seenDevices[item.Tags.DeviceId] = true
+		}
+	}
+
+	// Return the filtered data
+	return uniqueData, nil
+}
+
+type WeatherStationFields struct {
+	C1Count                float64 `json:"c1Count"`
+	C1State                bool    `json:"c1State"`
+	C2Count                float64 `json:"c2Count"`
+	C2State                bool    `json:"c2State"`
+	Data                   string  `json:"data"`
+	EmwAtmPres             float64 `json:"emwAtmPres"`
+	EmwAvgWindSpeed        float64 `json:"emwAvgWindSpeed"`
+	EmwGustWindSpeed       float64 `json:"emwGustWindSpeed"`
+	EmwHumidity            float64 `json:"emwHumidity"`
+	EmwLuminosity          float64 `json:"emwLuminosity"`
+	EmwRainLevel           float64 `json:"emwRainLevel"`
+	EmwSolarRadiation      float64 `json:"emwSolarRadiation"`
+	EmwTemperature         float64 `json:"emwTemperature"`
+	EmwUv                  float64 `json:"emwUv"`
+	EmwWindDirection       float64 `json:"emwWindDirection"`
+	EnvSensorFailStatus    bool    `json:"envSensorFailStatus"`
+	FCnt                   float64 `json:"fCnt"`
+	FPort                  float64 `json:"fPort"`
+	FirmwareVersion        uint64
+	InternalBatteryVoltage float64 `json:"internalBatteryVoltage"`
+	InternalHumidity       float64 `json:"internalHumidity"`
+	InternalTemperature    float64 `json:"internalTemperature"`
+	PowerSource            bool    `json:"powerSource"`
+	RxAlt_0                float64 `json:"rxAlt_0"`
+	RxLat_0                float64 `json:"rxLat_0"`
+	RxLon_0                float64 `json:"rxLon_0"`
+	RxRssi_0               float64 `json:"rxRssi_0"`
+	RxSnr_0                float64 `json:"rxSnr_0"`
+	TxBandWidth            float64 `json:"txBandWidth"`
+	TxFrequency            float64 `json:"txFrequency"`
+	TxSpreadFactor         float64 `json:"txSpreadFactor"`
+}
+
+type WeatherStationData struct {
+	Fields    WeatherStationFields `json:"fields"`
+	Name      string               `json:"name"`
+	Tags      Tags                 `json:"tags"`
+	Timestamp float64              `json:"timestamp"`
+}
+
+func fetchWeatherStation() ([]WeatherStationData, error) {
+	// API URL
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/LNS/WeatherStation/all?interval=30"
+
+	// Create a custom HTTP client that doesn't verify SSL certificates
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Disable SSL verification
+			},
+		},
+		Timeout: 30 * time.Second, // Optional timeout for the request
+	}
+
+	// Make the HTTP GET request
+	response, err := client.Get(apiUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check for successful HTTP response status
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	}
+
+	// Read the response body
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Parse the JSON response into a slice of SmartLightData (since the response is an array)
+	var data []WeatherStationData
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	// Remove duplicates based on DeviceId
+	uniqueData := make([]WeatherStationData, 0)
+	seenDevices := make(map[string]bool)
+
+	for _, item := range data {
+		if !seenDevices[item.Tags.DeviceId] {
+			uniqueData = append(uniqueData, item)
+			seenDevices[item.Tags.DeviceId] = true
+		}
+	}
+
+	// Return the filtered data
+	return uniqueData, nil
+}
+
 func fetchUsers() ([]UserData, error) {
 	err := godotenv.Load()
 	if err != nil {
@@ -134,7 +460,7 @@ func fetchUsers() ([]UserData, error) {
 		return nil, fmt.Errorf("error connecting to the database: %v", err)
 	}
 
-	query := `SELECT "alarms", "phone" FROM "User"`
+	query := `SELECT "id", "phone" FROM "User"`
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -143,34 +469,39 @@ func fetchUsers() ([]UserData, error) {
 	defer rows.Close()
 
 	var userData []UserData
+	var alarms []Alarm
 
 	for rows.Next() {
 		var loc UserData
-		var alarmsTemp string
 
-		err := rows.Scan(&alarmsTemp, &loc.Phone)
+		err := rows.Scan(&loc.Id, &loc.Phone)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning row: %v", err)
 		}
 
-		if alarmsTemp != "{}" {
-			alarmsTemp = strings.ReplaceAll(alarmsTemp, "\\\"", "\"")
-			alarmsTemp = "" + alarmsTemp[2:len(alarmsTemp)-2] + ""
-			alarmsTemp = "[" + alarmsTemp + "]"
-			alarmsTemp = strings.Replace(alarmsTemp, `","`, ",", -1)
-
-			err := json.Unmarshal([]byte(alarmsTemp), &loc.Alarms)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			userData = append(userData, loc)
-		}
+		userData = append(userData, loc)
 	}
 
-	err = rows.Err()
-	if err != nil {
-		return nil, fmt.Errorf("error iterating over rows: %v", err)
+	for i := range userData {
+		query = fmt.Sprintf(`SELECT id, type, local, deveui, trigger, triggerAt, triggerType, alreadyPlayed FROM Alarms WHERE userId = '%d'`, userData[i].Id)
+		rows, err := db.Query(query)
+		if err != nil {
+			return nil, fmt.Errorf("error querying the database: %v", err)
+		}
+		defer rows.Close()
+
+		var alarm Alarm
+
+		for rows.Next() {
+			err := rows.Scan(&alarm.Id, &alarm.UserId, &alarm.Type, &alarm.Local, &alarm.Deveui, &alarm.Trigger, &alarm.TriggerAt, &alarm.TriggerType, &alarm.AlreadyPlayed)
+			if err != nil {
+				return nil, fmt.Errorf("error querying alarms database: %v", err)
+			}
+		}
+
+		alarms = append(alarms, alarm)
+
+		// Trocar ordem deste algoritimo, temos que preencher os alarmes dos usuários durante o loc do userData. Fazer query dos alarmes primeiro e ai preencher no user data ao lado dos $loc.
 	}
 
 	return userData, nil
@@ -218,17 +549,20 @@ func updateAlarmAlreadyPlayedOnSupabase(messages []Message) {
 }
 
 type UserData struct {
-	Alarms []Alarm `json:"alarms"`
-	Phone  string  `json:"phone"`
+	Id     int64  `json:"id"`
+	Phone  string `json:"phone"`
+	Alarms Alarm
 }
 
 type Alarm struct {
+	Id            int8   `json:"id"`
+	UserId        int8   `json:"userId"`
 	Type          string `json:"type"`
 	Local         string `json:"local"`
-	DEVEUI        string `json:"deveui"`
+	Deveui        string `json:"deveui"`
 	Trigger       string `json:"trigger"`
-	TriggerType   string `json:"triggerType"`
 	TriggerAt     string `json:"triggerAt"`
+	TriggerType   string `json:"triggerType"`
 	AlreadyPlayed bool   `json:"alreadyPlayed"`
 }
 
