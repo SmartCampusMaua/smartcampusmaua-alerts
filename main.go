@@ -441,10 +441,10 @@ func fetchWeatherStation() ([]WeatherStationData, error) {
 }
 
 func fetchUsers() ([]UserData, []Alarm, error) {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 	connStr := os.Getenv("supabaseConnection")
 
 	db, err := sql.Open("postgres", connStr)
@@ -502,10 +502,10 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 }
 
 func updateAlarmAlreadyPlayedOnSupabase(messages []Message) {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 	connStr := os.Getenv("supabaseConnection")
 
 	db, err := sql.Open("postgres", connStr)
@@ -514,30 +514,12 @@ func updateAlarmAlreadyPlayedOnSupabase(messages []Message) {
 	}
 	defer db.Close()
 
-	updateQuery := `
-		UPDATE "User"
-		SET "alarms" = array(
-			SELECT CASE
-					WHEN element->>'deveui' = $1
-						AND element->>'trigger' = $2
-						AND element->>'triggerType' = $3
-						AND element->>'triggerAt' = $4
-					THEN jsonb_set(element, '{alreadyPlayed}', 'true'::jsonb)
-					ELSE element
-			END
-			FROM unnest("alarms") AS element
-		)
-	`
+	query := `UPDATE "Alarms" SET "alreadyPlayed" = true WHERE "id" = $1`
 
-	for _, msg := range messages {
-
-		_, err := db.Exec(updateQuery, msg.DEVEUI, msg.Trigger, msg.TriggerType, msg.TriggerAt)
-		if err != nil {
-			log.Printf("Error updating alarm for DEVEUI: %s, Trigger: %s, TriggerType: %s, TriggerAt: %s. Error: %v",
-				msg.DEVEUI, msg.Trigger, msg.TriggerType, msg.TriggerAt, err)
-		} else {
-			fmt.Printf("Successfully updated alarm for DEVEUI: %s, Trigger: %s, TriggerType: %s, TriggerAt: %s\n",
-				msg.DEVEUI, msg.Trigger, msg.TriggerType, msg.TriggerAt)
+	for _, message := range messages {
+		_, updateAlarmErr := db.Exec(query, message.Id)
+		if updateAlarmErr != nil {
+			fmt.Printf("update alarm alreadyPlayed error: %v", updateAlarmErr)
 		}
 	}
 }
@@ -569,6 +551,7 @@ type Message struct {
 	Phone        string
 	Local        string
 	CurrentValue string
+	Id           int8
 }
 
 func AlarmMessages() []Message {
@@ -603,7 +586,7 @@ func AlarmMessages() []Message {
 	for _, item := range userData {
 		for _, alarm := range Alarms {
 			if !alarm.AlreadyPlayed && item.Phone != "" && item.Id == int64(alarm.UserId) {
-				messages = append(messages, Message{DEVEUI: alarm.Deveui, Type: alarm.Type, Trigger: alarm.Trigger, TriggerType: alarm.TriggerType, TriggerAt: alarm.TriggerAt, Phone: item.Phone, Local: alarm.Local})
+				messages = append(messages, Message{DEVEUI: alarm.Deveui, Type: alarm.Type, Trigger: alarm.Trigger, TriggerType: alarm.TriggerType, TriggerAt: alarm.TriggerAt, Phone: item.Phone, Local: alarm.Local, Id: alarm.Id})
 			}
 		}
 	}
@@ -834,7 +817,7 @@ func AlarmMessages() []Message {
 }
 
 func main() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(30 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
@@ -847,7 +830,6 @@ func main() {
 			phoneNumberID := os.Getenv("PHONE_NUMBER_ID_META")
 
 			var messages []Message = AlarmMessages()
-			fmt.Println(messages)
 
 			for _, message := range messages {
 				phoneNumber := "55" + message.Phone
@@ -909,7 +891,7 @@ func main() {
 				}
 			}
 
-			// updateAlarmAlreadyPlayedOnSupabase(messages)
+			updateAlarmAlreadyPlayedOnSupabase(messages)
 		}
 	}
 }
