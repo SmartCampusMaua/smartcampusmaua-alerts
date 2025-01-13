@@ -605,7 +605,7 @@ func getFieldValue(data interface{}, fieldName string) (interface{}, error) {
 
 func AlarmMessages() []Message {
 	var messages []Message
-  var finalMessages []Message
+	var finalMessages []Message
 
 	smartLightData, err := fetchSmartLight()
 	if err != nil {
@@ -666,32 +666,36 @@ func AlarmMessages() []Message {
 
 		switch v := dataValue.(type) {
 		case float64:
-			if message.TriggerAt == "higher" && message.Trigger > dataValue {
-        finalMessages = append(finalMessages, message)
-      } else if message.TriggerAt == "lower" && message.Trigger < dataValue {
-        finalMessages = append(finalMessages, message)
-      }
+      triggerValue, _ := strconv.ParseFloat(message.Trigger, 64)
+			if message.TriggerAt == "higher" && triggerValue > v {
+				finalMessages = append(finalMessages, message)
+			} else if message.TriggerAt == "lower" && triggerValue < v {
+				finalMessages = append(finalMessages, message)
+			}
 
-      message.CurrentValue = fmt.Sprintf("%v", dataValue)
+			message.CurrentValue = fmt.Sprintf("%v", v)
 		case int64:
-			if message.TriggerAt == "higher" && message.Trigger > dataValue {
-        finalMessages = append(finalMessages, message)
-      } else if message.TriggerAt == "lower" && message.Trigger < dataValue {
-        finalMessages = append(finalMessages, message)
-      }
+      triggerValue, _ := strconv.ParseInt(message.Trigger, 10, 64)
+			if message.TriggerAt == "higher" && triggerValue > v {
+				finalMessages = append(finalMessages, message)
+			} else if message.TriggerAt == "lower" && triggerValue < v {
+				finalMessages = append(finalMessages, message)
+			}
 
-      message.CurrentValue = fmt.Sprintf("%v", dataValue)
+			message.CurrentValue = fmt.Sprintf("%v", v)
 		case string:
 			fmt.Printf("String value: %s\n", v) // Tratar depois, não sei como será o caso string então não adianta fazer agora
 		case bool:
-			if message.TriggerAt == "true" && dataValue == true {
-        finalMessages = append(finalMessages, message)
-      } else if message.Trigger == "false" && dataValue == false {
-        finalMessages = append(finalMessages, message)
-      }
+			if message.TriggerAt == "true" && v == true {
+				finalMessages = append(finalMessages, message)
+			} else if message.Trigger == "false" && v == false {
+				finalMessages = append(finalMessages, message)
+			}
 
-      message.CurrentValue = fmt.Sprintf("%v", dataValue)
+			message.CurrentValue = fmt.Sprintf("%v", v)
+		}
 	}
+
 	return finalMessages
 }
 
