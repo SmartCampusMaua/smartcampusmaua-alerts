@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"reflect"
 	"strconv"
-	"unicode"
 
 	"crypto/tls"
 	"database/sql"
@@ -480,7 +478,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 		userData = append(userData, loc)
 	}
 
-	alarmQuery := fmt.Sprintf(`SELECT "id", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed" FROM "Alarms"`)
+	alarmQuery := `SELECT "id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed" FROM "Alarms"`
 
 	alarmRows, err := db.Query(alarmQuery)
 	if err != nil {
@@ -492,7 +490,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 	for alarmRows.Next() {
 		var loc Alarm
 
-		err := alarmRows.Scan(&loc.Id, &loc.Type, &loc.Local, &loc.Deveui, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed)
+		err := alarmRows.Scan(&loc.Id, &loc.UserId, &loc.Type, &loc.Local, &loc.Deveui, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error scanning alarm row: %v", err)
 		}
@@ -573,36 +571,6 @@ type Message struct {
 	CurrentValue string
 }
 
-func getFieldValue(data interface{}, fieldName string) (interface{}, error) {
-	v := reflect.ValueOf(data)
-
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	if v.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("data is not a struct")
-	}
-
-	field := v.FieldByName(fieldName)
-	if !field.IsValid() {
-		return nil, fmt.Errorf("field %s does not exist", fieldName)
-	}
-
-	switch field.Kind() {
-	case reflect.Float64:
-		return field.Float(), nil
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return field.Int(), nil
-	case reflect.String:
-		return field.String(), nil
-	case reflect.Bool:
-		return field.Bool(), nil
-	default:
-		return nil, fmt.Errorf("unsupported field type: %s", field.Kind())
-	}
-}
-
 func AlarmMessages() []Message {
 	var messages []Message
 	var finalMessages []Message
@@ -634,7 +602,7 @@ func AlarmMessages() []Message {
 	}
 	for _, item := range userData {
 		for _, alarm := range Alarms {
-			if !alarm.AlreadyPlayed {
+			if !alarm.AlreadyPlayed && item.Phone != "" && item.Id == int64(alarm.UserId) {
 				messages = append(messages, Message{DEVEUI: alarm.Deveui, Type: alarm.Type, Trigger: alarm.Trigger, TriggerType: alarm.TriggerType, TriggerAt: alarm.TriggerAt, Phone: item.Phone, Local: alarm.Local})
 			}
 		}
@@ -643,64 +611,230 @@ func AlarmMessages() []Message {
 	for _, message := range messages {
 		dataType := message.Type
 		dataTriggerType := message.TriggerType
-		var dataValue interface{}
-		var err error
+		deviceId := message.DEVEUI
+		trigger, _ := strconv.ParseFloat(message.Trigger, 64)
+		triggerBool, _ := strconv.ParseBool(message.Trigger)
+		triggerAt := message.TriggerAt
+		var currentValue *float64
+		var currentBool *bool
+		var canAddToMessages = false
+		messageToSave := message
 
-		switch dataTriggerType {
+		switch dataType {
 		case "SmartLight":
-			dataValue, err = getFieldValue(smartLightData, dataType)
+			{
+				var dataToPass SmartLightData
+				for _, smartLight := range smartLightData {
+					if smartLight.Tags.DeviceId == deviceId {
+						dataToPass = smartLight
+					}
+				}
+
+				switch dataTriggerType {
+				case "batteryVoltage":
+					{
+						currentValue = &dataToPass.Fields.BatteryVoltage
+					}
+				case "boardVoltage":
+					{
+						currentValue = &dataToPass.Fields.BoardVoltage
+					}
+				case "humidity":
+					{
+						currentValue = &dataToPass.Fields.Humidity
+					}
+				case "luminosity":
+					{
+						currentValue = &dataToPass.Fields.Luminosity
+					}
+				case "movement":
+					{
+						currentValue = &dataToPass.Fields.Movement
+					}
+				case "temperature":
+					{
+						currentValue = &dataToPass.Fields.Temperature
+					}
+				}
+				if triggerAt == "higher" && trigger > *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "lower" && trigger < *currentValue {
+					canAddToMessages = true
+				}
+			}
+
 		case "WaterTankLevel":
-			dataValue, err = getFieldValue(waterTankData, dataType)
+			{
+				var dataToPass WaterTankData
+				for _, waterTank := range waterTankData {
+					if waterTank.Tags.DeviceId == deviceId {
+						dataToPass = waterTank
+					}
+				}
+
+				switch dataTriggerType {
+				case "boardVoltage":
+					{
+						currentValue = &dataToPass.Fields.BoardVoltage
+					}
+				case "distance":
+					{
+						currentValue = &dataToPass.Fields.Distance
+					}
+				}
+				if triggerAt == "higher" && trigger > *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "lower" && trigger < *currentValue {
+					canAddToMessages = true
+				}
+			}
+
 		case "Hydrometer":
-			dataValue, err = getFieldValue(hydrometerData, dataType)
+			{
+				var dataToPass HydrometerData
+				for _, hydrometer := range hydrometerData {
+					if hydrometer.Tags.DeviceId == deviceId {
+						dataToPass = hydrometer
+					}
+				}
+
+				switch dataTriggerType {
+				case "boardVoltage":
+					{
+						currentValue = &dataToPass.Fields.BoardVoltage
+					}
+				case "counter":
+					{
+						currentValue = &dataToPass.Fields.Counter
+					}
+				}
+				if triggerAt == "higher" && trigger > *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "lower" && trigger < *currentValue {
+					canAddToMessages = true
+				}
+			}
+
 		case "EnergyMeter":
-			dataValue, err = getFieldValue(energyMeterData, dataType)
+			{
+				var dataToPass EnergyMeterData
+				for _, energyMeter := range energyMeterData {
+					if energyMeter.Tags.DeviceId == deviceId {
+						dataToPass = energyMeter
+					}
+				}
+
+				switch dataTriggerType {
+				case "boardVoltage":
+					{
+						currentValue = &dataToPass.Fields.BoardVoltage
+					}
+				case "forwardEnergy":
+					{
+						currentValue = &dataToPass.Fields.ForwardEnergy
+					}
+				case "reverseEnergy":
+					{
+						currentValue = &dataToPass.Fields.ReverseEnergy
+					}
+				}
+				if triggerAt == "higher" && trigger > *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "lower" && trigger < *currentValue {
+					canAddToMessages = true
+				}
+			}
+
 		case "WeatherStation":
-			dataValue, err = getFieldValue(weatherStationData, dataType)
+			{
+				var dataToPass WeatherStationData
+				for _, weatherStation := range weatherStationData {
+					if weatherStation.Tags.DeviceId == deviceId {
+						dataToPass = weatherStation
+					}
+				}
+
+				switch dataTriggerType {
+				case "c1Count":
+					{
+						currentValue = &dataToPass.Fields.C1Count
+					}
+				case "c1State":
+					{
+						currentBool = &dataToPass.Fields.C1State
+					}
+				case "c2Count":
+					{
+						currentValue = &dataToPass.Fields.C2Count
+					}
+				case "c2State":
+					{
+						currentBool = &dataToPass.Fields.C2State
+					}
+				case "emwAtmPres":
+					{
+						currentValue = &dataToPass.Fields.EmwAtmPres
+					}
+				case "emwAvgWindSpeed":
+					{
+						currentValue = &dataToPass.Fields.EmwAvgWindSpeed
+					}
+				case "emwGustWindSpeed":
+					{
+						currentValue = &dataToPass.Fields.EmwGustWindSpeed
+					}
+				case "emwHumidity":
+					{
+						currentValue = &dataToPass.Fields.EmwHumidity
+					}
+				case "emwLuminosity":
+					{
+						currentValue = &dataToPass.Fields.EmwLuminosity
+					}
+				case "emwRainLevel":
+					{
+						currentValue = &dataToPass.Fields.EmwRainLevel
+					}
+				case "emwSolarRadiation":
+					{
+						currentValue = &dataToPass.Fields.EmwSolarRadiation
+					}
+				case "emwTemperature":
+					{
+						currentValue = &dataToPass.Fields.EmwTemperature
+					}
+				case "emwUv":
+					{
+						currentValue = &dataToPass.Fields.EmwUv
+					}
+				}
+				if triggerAt == "higher" && trigger > *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "lower" && trigger < *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "true" && triggerBool && *currentBool {
+					canAddToMessages = true
+				} else if triggerAt == "false" && !triggerBool && !*currentBool {
+					canAddToMessages = true
+				}
+			}
+		}
+		if canAddToMessages {
+			if currentValue != nil {
+				messageToSave.CurrentValue = fmt.Sprintf("%v", *currentValue)
+			} else {
+				messageToSave.CurrentValue = fmt.Sprintf("%v", *currentBool)
+			}
+			finalMessages = append(finalMessages, messageToSave)
 		}
 
-		if err != nil {
-			fmt.Printf("Error: %v\n", err)
-			continue
-		}
-
-		switch v := dataValue.(type) {
-		case float64:
-      triggerValue, _ := strconv.ParseFloat(message.Trigger, 64)
-			if message.TriggerAt == "higher" && triggerValue > v {
-				finalMessages = append(finalMessages, message)
-			} else if message.TriggerAt == "lower" && triggerValue < v {
-				finalMessages = append(finalMessages, message)
-			}
-
-			message.CurrentValue = fmt.Sprintf("%v", v)
-		case int64:
-      triggerValue, _ := strconv.ParseInt(message.Trigger, 10, 64)
-			if message.TriggerAt == "higher" && triggerValue > v {
-				finalMessages = append(finalMessages, message)
-			} else if message.TriggerAt == "lower" && triggerValue < v {
-				finalMessages = append(finalMessages, message)
-			}
-
-			message.CurrentValue = fmt.Sprintf("%v", v)
-		case string:
-			fmt.Printf("String value: %s\n", v) // Tratar depois, não sei como será o caso string então não adianta fazer agora
-		case bool:
-			if message.TriggerAt == "true" && v == true {
-				finalMessages = append(finalMessages, message)
-			} else if message.Trigger == "false" && v == false {
-				finalMessages = append(finalMessages, message)
-			}
-
-			message.CurrentValue = fmt.Sprintf("%v", v)
-		}
 	}
 
 	return finalMessages
 }
 
 func main() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
@@ -713,6 +847,7 @@ func main() {
 			phoneNumberID := os.Getenv("PHONE_NUMBER_ID_META")
 
 			var messages []Message = AlarmMessages()
+			fmt.Println(messages)
 
 			for _, message := range messages {
 				phoneNumber := "55" + message.Phone
