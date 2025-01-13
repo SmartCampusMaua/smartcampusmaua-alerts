@@ -15,8 +15,6 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-
-	"github.com/joho/godotenv"
 )
 
 type Tags struct {
