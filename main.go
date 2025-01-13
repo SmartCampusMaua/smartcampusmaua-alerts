@@ -821,10 +821,10 @@ func main() {
 	for {
 		select {
 		case <-ticker.C:
-			err := godotenv.Load()
-			if err != nil {
-				log.Fatalf("Error loading .env file: %v", err)
-			}
+			// err := godotenv.Load()
+			// if err != nil {
+			// 	log.Fatalf("Error loading .env file: %v", err)
+			// }
 
 			accessToken := os.Getenv("ACCESS_TOKEN_META")
 			phoneNumberID := os.Getenv("PHONE_NUMBER_ID_META")
