@@ -442,7 +442,7 @@ func fetchWeatherStation() ([]WeatherStationData, error) {
 	return uniqueData, nil
 }
 
-func fetchUsers() ([]UserData, error) {
+func fetchUsers() ([]UserData, []Alarm, error) {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -451,60 +451,56 @@ func fetchUsers() ([]UserData, error) {
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		return nil, fmt.Errorf("error opening database: %v", err)
+		return nil, nil, fmt.Errorf("error opening database: %v", err)
 	}
 	defer db.Close()
 
 	err = db.Ping()
 	if err != nil {
-		return nil, fmt.Errorf("error connecting to the database: %v", err)
+		return nil, nil, fmt.Errorf("error connecting to the database: %v", err)
 	}
 
-	query := `SELECT "id", "phone" FROM "User"`
+	userQuery := `SELECT "id", "phone" FROM "User"`
 
-	rows, err := db.Query(query)
+	userRows, err := db.Query(userQuery)
 	if err != nil {
-		return nil, fmt.Errorf("error querying the database: %v", err)
+		return nil, nil, fmt.Errorf("error querying users: %v", err)
 	}
-	defer rows.Close()
+	defer userRows.Close()
 
 	var userData []UserData
-	var alarms []Alarm
-
-	for rows.Next() {
+	for userRows.Next() {
 		var loc UserData
 
-		err := rows.Scan(&loc.Id, &loc.Phone)
+		err := userRows.Scan(&loc.Id, &loc.Phone)
 		if err != nil {
-			return nil, fmt.Errorf("error scanning row: %v", err)
+			return nil, nil, fmt.Errorf("error scanning user row: %v", err)
 		}
 
 		userData = append(userData, loc)
 	}
 
-	for i := range userData {
-		query = fmt.Sprintf(`SELECT id, type, local, deveui, trigger, triggerAt, triggerType, alreadyPlayed FROM Alarms WHERE userId = '%d'`, userData[i].Id)
-		rows, err := db.Query(query)
+	alarmQuery := fmt.Sprintf(`SELECT "id", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed" FROM "Alarms"`)
+
+	alarmRows, err := db.Query(alarmQuery)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error querying alarms")
+	}
+	defer alarmRows.Close()
+
+	var alarmData []Alarm
+	for alarmRows.Next() {
+		var loc Alarm
+
+		err := alarmRows.Scan(&loc.Id, &loc.Type, &loc.Local, &loc.Deveui, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed)
 		if err != nil {
-			return nil, fmt.Errorf("error querying the database: %v", err)
-		}
-		defer rows.Close()
-
-		var alarm Alarm
-
-		for rows.Next() {
-			err := rows.Scan(&alarm.Id, &alarm.UserId, &alarm.Type, &alarm.Local, &alarm.Deveui, &alarm.Trigger, &alarm.TriggerAt, &alarm.TriggerType, &alarm.AlreadyPlayed)
-			if err != nil {
-				return nil, fmt.Errorf("error querying alarms database: %v", err)
-			}
+			return nil, nil, fmt.Errorf("error scanning alarm row: %v", err)
 		}
 
-		alarms = append(alarms, alarm)
-
-		// Trocar ordem deste algoritimo, temos que preencher os alarmes dos usuários durante o loc do userData. Fazer query dos alarmes primeiro e ai preencher no user data ao lado dos $loc.
+		alarmData = append(alarmData, loc)
 	}
 
-	return userData, nil
+	return userData, alarmData, nil
 }
 
 func updateAlarmAlreadyPlayedOnSupabase(messages []Message) {
@@ -577,64 +573,126 @@ type Message struct {
 	CurrentValue string
 }
 
+func getFieldValue(data interface{}, fieldName string) (interface{}, error) {
+	v := reflect.ValueOf(data)
+
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	if v.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("data is not a struct")
+	}
+
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() {
+		return nil, fmt.Errorf("field %s does not exist", fieldName)
+	}
+
+	switch field.Kind() {
+	case reflect.Float64:
+		return field.Float(), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return field.Int(), nil
+	case reflect.String:
+		return field.String(), nil
+	case reflect.Bool:
+		return field.Bool(), nil
+	default:
+		return nil, fmt.Errorf("unsupported field type: %s", field.Kind())
+	}
+}
+
 func AlarmMessages() []Message {
 	var messages []Message
+  var finalMessages []Message
 
 	smartLightData, err := fetchSmartLight()
 	if err != nil {
-		log.Fatalf("Error fetching data: %v", err)
+		log.Fatalf("Error fetching smartlight data: %v", err)
+	}
+	waterTankData, err := fetchWaterTank()
+	if err != nil {
+		log.Fatalf("Error fetching watertank data: %v", err)
+	}
+	hydrometerData, err := fetchHydrometer()
+	if err != nil {
+		log.Fatalf("Error fetching hydrometer data: %v", err)
+	}
+	energyMeterData, err := fetchEnergyMeter()
+	if err != nil {
+		log.Fatalf("Error fetching energymeter data: %v", err)
+	}
+	weatherStationData, err := fetchWeatherStation()
+	if err != nil {
+		log.Fatalf("Error fetching weatherstation data: %v", err)
 	}
 
-	userData, userError := fetchUsers()
+	userData, Alarms, userError := fetchUsers()
 	if userError != nil {
 		log.Fatalf("Error fetching data: %v", userError)
 	}
 	for _, item := range userData {
-		for _, alarm := range item.Alarms {
+		for _, alarm := range Alarms {
 			if !alarm.AlreadyPlayed {
-				messages = append(messages, Message{DEVEUI: alarm.DEVEUI, Type: alarm.Type, Trigger: alarm.Trigger, TriggerType: alarm.TriggerType, TriggerAt: alarm.TriggerAt, Phone: item.Phone, Local: alarm.Local})
-			}
-		}
-
-		// fmt.Println(item.Phone)
-	}
-
-	for _, smartLight := range smartLightData {
-		val := reflect.ValueOf(smartLight.Fields)
-		for i := 0; i < len(messages); i++ {
-			message := &messages[i]
-			fieldName := message.TriggerType
-			if len(fieldName) > 0 {
-				fieldName = string(unicode.ToUpper(rune(fieldName[0]))) + fieldName[1:]
-			}
-
-			messageTrigger, err := strconv.ParseFloat(message.Trigger, 64)
-			if err != nil {
-				fmt.Printf("Error: %e", err)
-			}
-
-			fieldVal := val.FieldByName(fieldName)
-			if fieldVal.IsValid() && smartLight.Tags.DeviceId == message.DEVEUI {
-				triggerValue := float32(fieldVal.Float())
-
-				if message.TriggerAt == "higher" {
-					if float32(messageTrigger) > triggerValue {
-						messages = append(messages[:i], messages[i+1:]...)
-						i--
-					}
-				} else {
-					if float32(messageTrigger) < triggerValue {
-						messages = append(messages[:i], messages[i+1:]...)
-						i--
-					}
-				}
-				formattedString := fmt.Sprintf("%.2f", triggerValue)
-				message.CurrentValue = formattedString
+				messages = append(messages, Message{DEVEUI: alarm.Deveui, Type: alarm.Type, Trigger: alarm.Trigger, TriggerType: alarm.TriggerType, TriggerAt: alarm.TriggerAt, Phone: item.Phone, Local: alarm.Local})
 			}
 		}
 	}
 
-	return messages
+	for _, message := range messages {
+		dataType := message.Type
+		dataTriggerType := message.TriggerType
+		var dataValue interface{}
+		var err error
+
+		switch dataTriggerType {
+		case "SmartLight":
+			dataValue, err = getFieldValue(smartLightData, dataType)
+		case "WaterTankLevel":
+			dataValue, err = getFieldValue(waterTankData, dataType)
+		case "Hydrometer":
+			dataValue, err = getFieldValue(hydrometerData, dataType)
+		case "EnergyMeter":
+			dataValue, err = getFieldValue(energyMeterData, dataType)
+		case "WeatherStation":
+			dataValue, err = getFieldValue(weatherStationData, dataType)
+		}
+
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			continue
+		}
+
+		switch v := dataValue.(type) {
+		case float64:
+			if message.TriggerAt == "higher" && message.Trigger > dataValue {
+        finalMessages = append(finalMessages, message)
+      } else if message.TriggerAt == "lower" && message.Trigger < dataValue {
+        finalMessages = append(finalMessages, message)
+      }
+
+      message.CurrentValue = fmt.Sprintf("%v", dataValue)
+		case int64:
+			if message.TriggerAt == "higher" && message.Trigger > dataValue {
+        finalMessages = append(finalMessages, message)
+      } else if message.TriggerAt == "lower" && message.Trigger < dataValue {
+        finalMessages = append(finalMessages, message)
+      }
+
+      message.CurrentValue = fmt.Sprintf("%v", dataValue)
+		case string:
+			fmt.Printf("String value: %s\n", v) // Tratar depois, não sei como será o caso string então não adianta fazer agora
+		case bool:
+			if message.TriggerAt == "true" && dataValue == true {
+        finalMessages = append(finalMessages, message)
+      } else if message.Trigger == "false" && dataValue == false {
+        finalMessages = append(finalMessages, message)
+      }
+
+      message.CurrentValue = fmt.Sprintf("%v", dataValue)
+	}
+	return finalMessages
 }
 
 func main() {
