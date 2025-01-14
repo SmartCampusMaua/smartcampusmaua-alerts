@@ -15,6 +15,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	// "golang.org/x/text/date"
 )
 
 type Tags struct {
@@ -548,6 +549,19 @@ type Message struct {
 }
 
 func AlarmMessages() []Message {
+	connStr := os.Getenv("supabaseConnection")
+
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		fmt.Printf("Error connecting to supabase:%v\n", err)
+	}
+	defer db.Close()
+
+	err = db.Ping()
+	if err != nil {
+		fmt.Printf("Error connecting to supabase:%v\n", err)
+	}
+
 	var messages []Message
 	var finalMessages []Message
 
@@ -576,9 +590,24 @@ func AlarmMessages() []Message {
 	if userError != nil {
 		log.Fatalf("Error fetching data: %v", userError)
 	}
+
+	layout := "2006-01-02 15:04:05.999999999-07:00"
+	timeNow := time.Now()
+	var lastPlayedTime time.Time
 	for _, item := range userData {
 		for _, alarm := range Alarms {
+			if alarm.LastPlayed != "0" {
+				lastPlayedTime, err = time.Parse(layout, alarm.LastPlayed)
+			}
+			if err != nil {
+				fmt.Printf("Error getting lastPlayed: %v \n", err)
+			}
+			if alarm.AlreadyPlayed && timeNow.Sub(lastPlayedTime) >= 1*time.Hour {
+				alarm.AlreadyPlayed = false
+				db.Exec(`UPDATE "Alarms" SET "alreadyPlayed" = $1 WHERE "id" = $2`, alarm.AlreadyPlayed, alarm.Id)
+			}
 			if !alarm.AlreadyPlayed && item.Phone != "" && item.Id == int64(alarm.UserId) {
+				db.Exec(`UPDATE "Alarms" SET "lastPlayed" = $1 WHERE "id" = $2`, timeNow, alarm.Id)
 				messages = append(messages, Message{MessageAlarm: alarm, Phone: item.Phone})
 			}
 		}
@@ -805,20 +834,7 @@ func AlarmMessages() []Message {
 		}
 	}
 
-  // Places new lastPlayed value on database
-	connStr := os.Getenv("supabaseConnection")
-
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-    fmt.Printf("Error connecting to supabase:%v\n", err)
-	}
-	defer db.Close()
-
-	err = db.Ping()
-	if err != nil {
-    fmt.Printf("Error connecting to supabase:%v\n", err)
-	}
-
+	// Places new lastPlayed value on database
 	for _, finalMessage := range finalMessages {
 		if finalMessage.MessageAlarm.LastPlayed == "0" {
 			timeNow := fmt.Sprintf("%v", time.Now())
@@ -833,7 +849,7 @@ func AlarmMessages() []Message {
 }
 
 func main() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(1 * time.Minute)
 	for {
 		select {
 		case <-ticker.C:
