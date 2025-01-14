@@ -476,7 +476,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 		userData = append(userData, loc)
 	}
 
-	alarmQuery := `SELECT "id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed" FROM "Alarms"`
+	alarmQuery := `SELECT "id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed", "lastPlayed" FROM "Alarms"`
 
 	alarmRows, err := db.Query(alarmQuery)
 	if err != nil {
@@ -488,7 +488,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 	for alarmRows.Next() {
 		var loc Alarm
 
-		err := alarmRows.Scan(&loc.Id, &loc.UserId, &loc.Type, &loc.Local, &loc.Deveui, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed)
+		err := alarmRows.Scan(&loc.Id, &loc.UserId, &loc.Type, &loc.Local, &loc.Deveui, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed, &loc.LastPlayed)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error scanning alarm row: %v", err)
 		}
@@ -515,7 +515,7 @@ func updateAlarmAlreadyPlayedOnSupabase(messages []Message) {
 	query := `UPDATE "Alarms" SET "alreadyPlayed" = true WHERE "id" = $1`
 
 	for _, message := range messages {
-		_, updateAlarmErr := db.Exec(query, message.Id)
+		_, updateAlarmErr := db.Exec(query, message.MessageAlarm.Id)
 		if updateAlarmErr != nil {
 			fmt.Printf("update alarm alreadyPlayed error: %v", updateAlarmErr)
 		}
@@ -538,21 +538,29 @@ type Alarm struct {
 	TriggerAt     string `json:"triggerAt"`
 	TriggerType   string `json:"triggerType"`
 	AlreadyPlayed bool   `json:"alreadyPlayed"`
+	LastPlayed    string `json:"lastPlayed"`
 }
 
 type Message struct {
-	DEVEUI       string
-	Type         string
-	Trigger      string
-	TriggerType  string
-	TriggerAt    string
+	MessageAlarm Alarm
 	Phone        string
-	Local        string
 	CurrentValue string
-	Id           int8
 }
 
 func AlarmMessages() []Message {
+	connStr := os.Getenv("supabaseConnection")
+
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		fmt.Printf("Error connecting to supabase:%v\n", err)
+	}
+	defer db.Close()
+
+	err = db.Ping()
+	if err != nil {
+		fmt.Printf("Error connecting to supabase:%v\n", err)
+	}
+
 	var messages []Message
 	var finalMessages []Message
 
@@ -581,21 +589,36 @@ func AlarmMessages() []Message {
 	if userError != nil {
 		log.Fatalf("Error fetching data: %v", userError)
 	}
+
+	layout := "2006-01-02 15:04:05.999999999-07:00"
+	timeNow := time.Now().Format("2006-01-02 15:04:05.999999999-07:00")
+	var lastPlayedTime time.Time
 	for _, item := range userData {
 		for _, alarm := range Alarms {
+			if alarm.LastPlayed != "0" {
+				lastPlayedTime, err = time.Parse(layout, alarm.LastPlayed)
+			}
+			if err != nil {
+				fmt.Printf("Error getting lastPlayed: %v \n", err)
+			}
+			if alarm.AlreadyPlayed && time.Since(lastPlayedTime) >= 1*time.Hour {
+				alarm.AlreadyPlayed = false
+				db.Exec(`UPDATE "Alarms" SET "alreadyPlayed" = $1 WHERE "id" = $2`, alarm.AlreadyPlayed, alarm.Id)
+			}
 			if !alarm.AlreadyPlayed && item.Phone != "" && item.Id == int64(alarm.UserId) {
-				messages = append(messages, Message{DEVEUI: alarm.Deveui, Type: alarm.Type, Trigger: alarm.Trigger, TriggerType: alarm.TriggerType, TriggerAt: alarm.TriggerAt, Phone: item.Phone, Local: alarm.Local, Id: alarm.Id})
+				db.Exec(`UPDATE "Alarms" SET "lastPlayed" = $1 WHERE "id" = $2`, timeNow, alarm.Id)
+				messages = append(messages, Message{MessageAlarm: alarm, Phone: item.Phone})
 			}
 		}
 	}
 
 	for _, message := range messages {
-		dataType := message.Type
-		dataTriggerType := message.TriggerType
-		deviceId := message.DEVEUI
-		trigger, _ := strconv.ParseFloat(message.Trigger, 64)
-		triggerBool, _ := strconv.ParseBool(message.Trigger)
-		triggerAt := message.TriggerAt
+		dataType := message.MessageAlarm.Type
+		dataTriggerType := message.MessageAlarm.TriggerType
+		deviceId := message.MessageAlarm.Deveui
+		trigger, _ := strconv.ParseFloat(message.MessageAlarm.Trigger, 64)
+		triggerBool, _ := strconv.ParseBool(message.MessageAlarm.Trigger)
+		triggerAt := message.MessageAlarm.TriggerAt
 		var currentValue *float64
 		var currentBool *bool
 		var canAddToMessages = false
@@ -808,14 +831,28 @@ func AlarmMessages() []Message {
 			}
 			finalMessages = append(finalMessages, messageToSave)
 		}
+	}
 
+	// Places new lastPlayed value on database
+	for _, finalMessage := range finalMessages {
+		if finalMessage.MessageAlarm.LastPlayed == "0" {
+			_, updateAlarmErr := db.Exec(`UPDATE "Alarms" SET "lastPlayed" = $1 WHERE "id" = $2`, timeNow, finalMessage.MessageAlarm.Id)
+			if updateAlarmErr != nil {
+				fmt.Printf("update alarm alreadyPlayed error: %v", updateAlarmErr)
+			}
+		}
+		// Alarm_History always has alreadyPlayed as false due to the order of inserts, may need to fix in the future if history needs change
+		_, alarmsHistoryErr := db.Exec(`INSERT INTO "Alarms_History" ("id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed", "lastPlayed") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, finalMessage.MessageAlarm.Id, finalMessage.MessageAlarm.UserId, finalMessage.MessageAlarm.Type, finalMessage.MessageAlarm.Local, finalMessage.MessageAlarm.Deveui, finalMessage.MessageAlarm.Trigger, finalMessage.MessageAlarm.TriggerAt, finalMessage.MessageAlarm.TriggerType, finalMessage.MessageAlarm.AlreadyPlayed, timeNow)
+		if alarmsHistoryErr != nil {
+			fmt.Printf("insert alarmHistory error: %v", alarmsHistoryErr)
+		}
 	}
 
 	return finalMessages
 }
 
 func main() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(1 * time.Minute)
 	for {
 		select {
 		case <-ticker.C:
@@ -846,11 +883,11 @@ func main() {
 							{
 								"type": "body",
 								"parameters": []map[string]string{
-									{"type": "text", "text": message.Type},
-									{"type": "text", "text": message.DEVEUI},
-									{"type": "text", "text": message.TriggerType},
+									{"type": "text", "text": message.MessageAlarm.Type},
+									{"type": "text", "text": message.MessageAlarm.Deveui},
+									{"type": "text", "text": message.MessageAlarm.TriggerType},
 									{"type": "text", "text": message.CurrentValue},
-									{"type": "text", "text": message.Trigger},
+									{"type": "text", "text": message.MessageAlarm.Trigger},
 								},
 							},
 						},
