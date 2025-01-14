@@ -476,7 +476,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 		userData = append(userData, loc)
 	}
 
-	alarmQuery := `SELECT "id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed" FROM "Alarms"`
+	alarmQuery := `SELECT "id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed", "lastPlayed" FROM "Alarms"`
 
 	alarmRows, err := db.Query(alarmQuery)
 	if err != nil {
@@ -488,7 +488,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 	for alarmRows.Next() {
 		var loc Alarm
 
-		err := alarmRows.Scan(&loc.Id, &loc.UserId, &loc.Type, &loc.Local, &loc.Deveui, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed)
+		err := alarmRows.Scan(&loc.Id, &loc.UserId, &loc.Type, &loc.Local, &loc.Deveui, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed, &loc.LastPlayed)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error scanning alarm row: %v", err)
 		}
@@ -515,7 +515,7 @@ func updateAlarmAlreadyPlayedOnSupabase(messages []Message) {
 	query := `UPDATE "Alarms" SET "alreadyPlayed" = true WHERE "id" = $1`
 
 	for _, message := range messages {
-		_, updateAlarmErr := db.Exec(query, message.Id)
+		_, updateAlarmErr := db.Exec(query, message.MessageAlarm.Id)
 		if updateAlarmErr != nil {
 			fmt.Printf("update alarm alreadyPlayed error: %v", updateAlarmErr)
 		}
@@ -538,18 +538,13 @@ type Alarm struct {
 	TriggerAt     string `json:"triggerAt"`
 	TriggerType   string `json:"triggerType"`
 	AlreadyPlayed bool   `json:"alreadyPlayed"`
+	LastPlayed    string `json:"lastPlayed"`
 }
 
 type Message struct {
-	DEVEUI       string
-	Type         string
-	Trigger      string
-	TriggerType  string
-	TriggerAt    string
+	MessageAlarm Alarm
 	Phone        string
-	Local        string
 	CurrentValue string
-	Id           int8
 }
 
 func AlarmMessages() []Message {
@@ -584,18 +579,18 @@ func AlarmMessages() []Message {
 	for _, item := range userData {
 		for _, alarm := range Alarms {
 			if !alarm.AlreadyPlayed && item.Phone != "" && item.Id == int64(alarm.UserId) {
-				messages = append(messages, Message{DEVEUI: alarm.Deveui, Type: alarm.Type, Trigger: alarm.Trigger, TriggerType: alarm.TriggerType, TriggerAt: alarm.TriggerAt, Phone: item.Phone, Local: alarm.Local, Id: alarm.Id})
+				messages = append(messages, Message{MessageAlarm: alarm, Phone: item.Phone})
 			}
 		}
 	}
 
 	for _, message := range messages {
-		dataType := message.Type
-		dataTriggerType := message.TriggerType
-		deviceId := message.DEVEUI
-		trigger, _ := strconv.ParseFloat(message.Trigger, 64)
-		triggerBool, _ := strconv.ParseBool(message.Trigger)
-		triggerAt := message.TriggerAt
+		dataType := message.MessageAlarm.Type
+		dataTriggerType := message.MessageAlarm.TriggerType
+		deviceId := message.MessageAlarm.Deveui
+		trigger, _ := strconv.ParseFloat(message.MessageAlarm.Trigger, 64)
+		triggerBool, _ := strconv.ParseBool(message.MessageAlarm.Trigger)
+		triggerAt := message.MessageAlarm.TriggerAt
 		var currentValue *float64
 		var currentBool *bool
 		var canAddToMessages = false
@@ -808,14 +803,37 @@ func AlarmMessages() []Message {
 			}
 			finalMessages = append(finalMessages, messageToSave)
 		}
+	}
 
+  // Places new lastPlayed value on database
+	connStr := os.Getenv("supabaseConnection")
+
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+    fmt.Printf("Error connecting to supabase:%v\n", err)
+	}
+	defer db.Close()
+
+	err = db.Ping()
+	if err != nil {
+    fmt.Printf("Error connecting to supabase:%v\n", err)
+	}
+
+	for _, finalMessage := range finalMessages {
+		if finalMessage.MessageAlarm.LastPlayed == "0" {
+			timeNow := fmt.Sprintf("%v", time.Now())
+			_, updateAlarmErr := db.Exec(`UPDATE "Alarms" SET "lastPlayed" = $1 WHERE "id" = $2`, timeNow, finalMessage.MessageAlarm.Id)
+			if updateAlarmErr != nil {
+				fmt.Printf("update alarm alreadyPlayed error: %v", updateAlarmErr)
+			}
+		}
 	}
 
 	return finalMessages
 }
 
 func main() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
@@ -846,11 +864,11 @@ func main() {
 							{
 								"type": "body",
 								"parameters": []map[string]string{
-									{"type": "text", "text": message.Type},
-									{"type": "text", "text": message.DEVEUI},
-									{"type": "text", "text": message.TriggerType},
+									{"type": "text", "text": message.MessageAlarm.Type},
+									{"type": "text", "text": message.MessageAlarm.Deveui},
+									{"type": "text", "text": message.MessageAlarm.TriggerType},
 									{"type": "text", "text": message.CurrentValue},
-									{"type": "text", "text": message.Trigger},
+									{"type": "text", "text": message.MessageAlarm.Trigger},
 								},
 							},
 						},
