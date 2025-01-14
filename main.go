@@ -842,9 +842,9 @@ func AlarmMessages() []Message {
 			}
 		}
 		// Alarm_History always has alreadyPlayed as false due to the order of inserts, may need to fix in the future if history needs change
-		_, alarmsHistoryErr := db.Exec(`INSERT INTO "Alarms_History" ("id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed", "lastPlayed") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, finalMessage.MessageAlarm.Id, finalMessage.MessageAlarm.UserId, finalMessage.MessageAlarm.Type, finalMessage.MessageAlarm.Local, finalMessage.MessageAlarm.Deveui, finalMessage.MessageAlarm.Trigger, finalMessage.MessageAlarm.TriggerAt, finalMessage.MessageAlarm.TriggerType, finalMessage.MessageAlarm.AlreadyPlayed, timeNow)
+		_, alarmsHistoryErr := db.Exec(`INSERT INTO "Alarms_History" ("id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed", "lastPlayed", "currentValue") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, finalMessage.MessageAlarm.Id, finalMessage.MessageAlarm.UserId, finalMessage.MessageAlarm.Type, finalMessage.MessageAlarm.Local, finalMessage.MessageAlarm.Deveui, finalMessage.MessageAlarm.Trigger, finalMessage.MessageAlarm.TriggerAt, finalMessage.MessageAlarm.TriggerType, finalMessage.MessageAlarm.AlreadyPlayed, timeNow, finalMessage.CurrentValue)
 		if alarmsHistoryErr != nil {
-			fmt.Printf("insert alarmHistory error: %v", alarmsHistoryErr)
+			fmt.Printf("insert alarmHistory error: %v\n", alarmsHistoryErr)
 		}
 	}
 
