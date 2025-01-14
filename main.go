@@ -601,7 +601,7 @@ func AlarmMessages() []Message {
 			if err != nil {
 				fmt.Printf("Error getting lastPlayed: %v \n", err)
 			}
-			if alarm.AlreadyPlayed && time.Since(lastPlayedTime) >= 1*time.Hour {
+			if alarm.AlreadyPlayed && time.Since(lastPlayedTime) >= 1*time.Second {
 				alarm.AlreadyPlayed = false
 				db.Exec(`UPDATE "Alarms" SET "alreadyPlayed" = $1 WHERE "id" = $2`, alarm.AlreadyPlayed, alarm.Id)
 			}
@@ -660,9 +660,9 @@ func AlarmMessages() []Message {
 						currentValue = &dataToPass.Fields.Temperature
 					}
 				}
-				if triggerAt == "higher" && trigger > *currentValue {
+				if triggerAt == "higher" && trigger < *currentValue {
 					canAddToMessages = true
-				} else if triggerAt == "lower" && trigger < *currentValue {
+				} else if triggerAt == "lower" && trigger > *currentValue {
 					canAddToMessages = true
 				}
 			}
@@ -686,9 +686,9 @@ func AlarmMessages() []Message {
 						currentValue = &dataToPass.Fields.Distance
 					}
 				}
-				if triggerAt == "higher" && trigger > *currentValue {
+				if triggerAt == "higher" && trigger < *currentValue {
 					canAddToMessages = true
-				} else if triggerAt == "lower" && trigger < *currentValue {
+				} else if triggerAt == "lower" && trigger > *currentValue {
 					canAddToMessages = true
 				}
 			}
@@ -712,9 +712,9 @@ func AlarmMessages() []Message {
 						currentValue = &dataToPass.Fields.Counter
 					}
 				}
-				if triggerAt == "higher" && trigger > *currentValue {
+				if triggerAt == "higher" && trigger < *currentValue {
 					canAddToMessages = true
-				} else if triggerAt == "lower" && trigger < *currentValue {
+				} else if triggerAt == "lower" && trigger > *currentValue {
 					canAddToMessages = true
 				}
 			}
@@ -742,9 +742,9 @@ func AlarmMessages() []Message {
 						currentValue = &dataToPass.Fields.ReverseEnergy
 					}
 				}
-				if triggerAt == "higher" && trigger > *currentValue {
+				if triggerAt == "higher" && trigger < *currentValue {
 					canAddToMessages = true
-				} else if triggerAt == "lower" && trigger < *currentValue {
+				} else if triggerAt == "lower" && trigger > *currentValue {
 					canAddToMessages = true
 				}
 			}
@@ -812,9 +812,9 @@ func AlarmMessages() []Message {
 						currentValue = &dataToPass.Fields.EmwUv
 					}
 				}
-				if triggerAt == "higher" && trigger > *currentValue {
+				if triggerAt == "higher" && trigger < *currentValue {
 					canAddToMessages = true
-				} else if triggerAt == "lower" && trigger < *currentValue {
+				} else if triggerAt == "lower" && trigger > *currentValue {
 					canAddToMessages = true
 				} else if triggerAt == "true" && triggerBool && *currentBool {
 					canAddToMessages = true
@@ -842,7 +842,7 @@ func AlarmMessages() []Message {
 			}
 		}
 		// Alarm_History always has alreadyPlayed as false due to the order of inserts, may need to fix in the future if history needs change
-		_, alarmsHistoryErr := db.Exec(`INSERT INTO "Alarms_History" ("id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed", "lastPlayed", "currentValue") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, finalMessage.MessageAlarm.Id, finalMessage.MessageAlarm.UserId, finalMessage.MessageAlarm.Type, finalMessage.MessageAlarm.Local, finalMessage.MessageAlarm.Deveui, finalMessage.MessageAlarm.Trigger, finalMessage.MessageAlarm.TriggerAt, finalMessage.MessageAlarm.TriggerType, finalMessage.MessageAlarm.AlreadyPlayed, timeNow, finalMessage.CurrentValue)
+		_, alarmsHistoryErr := db.Exec(`INSERT INTO "Alarms_History" ("id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "lastPlayed", "currentValue") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, finalMessage.MessageAlarm.Id, finalMessage.MessageAlarm.UserId, finalMessage.MessageAlarm.Type, finalMessage.MessageAlarm.Local, finalMessage.MessageAlarm.Deveui, finalMessage.MessageAlarm.Trigger, finalMessage.MessageAlarm.TriggerAt, finalMessage.MessageAlarm.TriggerType, timeNow, finalMessage.CurrentValue)
 		if alarmsHistoryErr != nil {
 			fmt.Printf("insert alarmHistory error: %v\n", alarmsHistoryErr)
 		}
@@ -852,7 +852,7 @@ func AlarmMessages() []Message {
 }
 
 func main() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
