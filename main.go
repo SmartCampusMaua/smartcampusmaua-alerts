@@ -15,7 +15,6 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	// "golang.org/x/text/date"
 )
 
 type Tags struct {
@@ -592,7 +591,7 @@ func AlarmMessages() []Message {
 	}
 
 	layout := "2006-01-02 15:04:05.999999999-07:00"
-	timeNow := time.Now()
+	timeNow := time.Now().Format("2006-01-02 15:04:05.999999999-07:00")
 	var lastPlayedTime time.Time
 	for _, item := range userData {
 		for _, alarm := range Alarms {
@@ -602,7 +601,7 @@ func AlarmMessages() []Message {
 			if err != nil {
 				fmt.Printf("Error getting lastPlayed: %v \n", err)
 			}
-			if alarm.AlreadyPlayed && timeNow.Sub(lastPlayedTime) >= 1*time.Hour {
+			if alarm.AlreadyPlayed && time.Since(lastPlayedTime) >= 1*time.Hour {
 				alarm.AlreadyPlayed = false
 				db.Exec(`UPDATE "Alarms" SET "alreadyPlayed" = $1 WHERE "id" = $2`, alarm.AlreadyPlayed, alarm.Id)
 			}
@@ -837,11 +836,15 @@ func AlarmMessages() []Message {
 	// Places new lastPlayed value on database
 	for _, finalMessage := range finalMessages {
 		if finalMessage.MessageAlarm.LastPlayed == "0" {
-			timeNow := fmt.Sprintf("%v", time.Now())
 			_, updateAlarmErr := db.Exec(`UPDATE "Alarms" SET "lastPlayed" = $1 WHERE "id" = $2`, timeNow, finalMessage.MessageAlarm.Id)
 			if updateAlarmErr != nil {
 				fmt.Printf("update alarm alreadyPlayed error: %v", updateAlarmErr)
 			}
+		}
+		// Alarm_History always has alreadyPlayed as false due to the order of inserts, may need to fix in the future if history needs change
+		_, alarmsHistoryErr := db.Exec(`INSERT INTO "Alarms_History" ("id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed", "lastPlayed") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, finalMessage.MessageAlarm.Id, finalMessage.MessageAlarm.UserId, finalMessage.MessageAlarm.Type, finalMessage.MessageAlarm.Local, finalMessage.MessageAlarm.Deveui, finalMessage.MessageAlarm.Trigger, finalMessage.MessageAlarm.TriggerAt, finalMessage.MessageAlarm.TriggerType, finalMessage.MessageAlarm.AlreadyPlayed, timeNow)
+		if alarmsHistoryErr != nil {
+			fmt.Printf("insert alarmHistory error: %v", alarmsHistoryErr)
 		}
 	}
 
