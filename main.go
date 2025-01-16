@@ -476,7 +476,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 		userData = append(userData, loc)
 	}
 
-	alarmQuery := `SELECT "id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed", "lastPlayed" FROM "Alarms"`
+	alarmQuery := `SELECT "id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "alreadyPlayed", "lastPlayed", "actionSensor" FROM "Alarms"`
 
 	alarmRows, err := db.Query(alarmQuery)
 	if err != nil {
@@ -488,7 +488,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 	for alarmRows.Next() {
 		var loc Alarm
 
-		err := alarmRows.Scan(&loc.Id, &loc.UserId, &loc.Type, &loc.Local, &loc.Deveui, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed, &loc.LastPlayed)
+		err := alarmRows.Scan(&loc.Id, &loc.UserId, &loc.Type, &loc.Local, &loc.Deveui, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed, &loc.LastPlayed, &loc.ActionSensor)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error scanning alarm row: %v", err)
 		}
@@ -539,6 +539,7 @@ type Alarm struct {
 	TriggerType   string `json:"triggerType"`
 	AlreadyPlayed bool   `json:"alreadyPlayed"`
 	LastPlayed    string `json:"lastPlayed"`
+	ActionSensor  string `json:"actionSensor"`
 }
 
 type Message struct {
@@ -601,7 +602,7 @@ func AlarmMessages() []Message {
 			if err != nil {
 				fmt.Printf("Error getting lastPlayed: %v \n", err)
 			}
-			if alarm.AlreadyPlayed && time.Since(lastPlayedTime) >= 1*time.Hour {
+			if alarm.AlreadyPlayed && time.Since(lastPlayedTime) >= 1*time.Second {
 				alarm.AlreadyPlayed = false
 				db.Exec(`UPDATE "Alarms" SET "alreadyPlayed" = $1 WHERE "id" = $2`, alarm.AlreadyPlayed, alarm.Id)
 			}
@@ -842,7 +843,7 @@ func AlarmMessages() []Message {
 			}
 		}
 		// Alarm_History always has alreadyPlayed as false due to the order of inserts, may need to fix in the future if history needs change
-		_, alarmsHistoryErr := db.Exec(`INSERT INTO "Alarms_History" ("id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "lastPlayed", "currentValue") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, finalMessage.MessageAlarm.Id, finalMessage.MessageAlarm.UserId, finalMessage.MessageAlarm.Type, finalMessage.MessageAlarm.Local, finalMessage.MessageAlarm.Deveui, finalMessage.MessageAlarm.Trigger, finalMessage.MessageAlarm.TriggerAt, finalMessage.MessageAlarm.TriggerType, timeNow, finalMessage.CurrentValue)
+		_, alarmsHistoryErr := db.Exec(`INSERT INTO "Alarms_History" ("id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "lastPlayed", "currentValue", "actionSensor") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, finalMessage.MessageAlarm.Id, finalMessage.MessageAlarm.UserId, finalMessage.MessageAlarm.Type, finalMessage.MessageAlarm.Local, finalMessage.MessageAlarm.Deveui, finalMessage.MessageAlarm.Trigger, finalMessage.MessageAlarm.TriggerAt, finalMessage.MessageAlarm.TriggerType, timeNow, finalMessage.CurrentValue, finalMessage.MessageAlarm.ActionSensor)
 		if alarmsHistoryErr != nil {
 			fmt.Printf("insert alarmHistory error: %v\n", alarmsHistoryErr)
 		}
@@ -852,7 +853,7 @@ func AlarmMessages() []Message {
 }
 
 func main() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
