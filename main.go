@@ -602,7 +602,7 @@ func AlarmMessages() []Message {
 			if err != nil {
 				fmt.Printf("Error getting lastPlayed: %v \n", err)
 			}
-			if alarm.AlreadyPlayed && time.Since(lastPlayedTime) >= 1*time.Second {
+			if alarm.AlreadyPlayed && time.Since(lastPlayedTime) >= 1*time.Hour {
 				alarm.AlreadyPlayed = false
 				db.Exec(`UPDATE "Alarms" SET "alreadyPlayed" = $1 WHERE "id" = $2`, alarm.AlreadyPlayed, alarm.Id)
 			}
@@ -853,7 +853,7 @@ func AlarmMessages() []Message {
 }
 
 func main() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(1 * time.Minute)
 	for {
 		select {
 		case <-ticker.C:
@@ -869,6 +869,12 @@ func main() {
 
 			for _, message := range messages {
 				phoneNumber := "55" + message.Phone
+        var triggerAt string
+        if (message.MessageAlarm.TriggerAt == "higher") {
+          triggerAt = "acima"
+        } else {
+          triggerAt = "abaixo"
+        }
 
 				// POST payload
 				payload := map[string]interface{}{
@@ -876,7 +882,7 @@ func main() {
 					"to":                phoneNumber,
 					"type":              "template",
 					"template": map[string]interface{}{
-						"name": "alarme_smartcampus",
+						"name": "alerta_smart",
 						"language": map[string]string{
 							"code": "pt_BR",
 						},
@@ -886,7 +892,9 @@ func main() {
 								"parameters": []map[string]string{
 									{"type": "text", "text": message.MessageAlarm.Type},
 									{"type": "text", "text": message.MessageAlarm.Deveui},
+									{"type": "text", "text": message.MessageAlarm.Local},
 									{"type": "text", "text": message.MessageAlarm.TriggerType},
+									{"type": "text", "text": triggerAt},
 									{"type": "text", "text": message.CurrentValue},
 									{"type": "text", "text": message.MessageAlarm.Trigger},
 								},
