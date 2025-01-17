@@ -438,6 +438,165 @@ func fetchWeatherStation() ([]WeatherStationData, error) {
 	return uniqueData, nil
 }
 
+type SprinklerFields struct {
+	BoardVoltage   float64 `json:"boardVoltage"`
+	Counter        float64 `json:"counter"`
+	Data           string  `json:"data"`
+	FCnt           float64 `json:"fCnt"`
+	FPort          float64 `json:"fPort"`
+	RxAlt_0        float64 `json:"rxAlt_0"`
+	RxLat_0        float64 `json:"rxLat_0"`
+	RxLon_0        float64 `json:"rxLon_0"`
+	RxRssi_0       float64 `json:"rxRssi_0"`
+	RxSnr_0        float64 `json:"rxSnr_0"`
+	Solenoid1      bool    `json:"solenoid1"`
+	Solenoid2      bool    `json:"solenoid2"`
+	Solenoid3      bool    `json:"solenoid3"`
+	TxBandWidth    float64 `json:"txBandWidth"`
+	TxFrequency    float64 `json:"txFrequency"`
+	TxSpreadFactor float64 `json:"txSpreadFactor"`
+}
+
+type SprinklerData struct {
+	Fields    SprinklerFields `json:"fields"`
+	Name      string          `json:"name"`
+	Tags      Tags            `json:"tags"`
+	Timestamp float64         `json:"timestamp"`
+}
+
+func fetchSprinkler() ([]SprinklerData, error) {
+	// API URL
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/LNS/Sprinkler/all?interval=30"
+
+	// Create a custom HTTP client that doesn't verify SSL certificates
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Disable SSL verification
+			},
+		},
+		Timeout: 30 * time.Second, // Optional timeout for the request
+	}
+
+	// Make the HTTP GET request
+	response, err := client.Get(apiUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check for successful HTTP response status
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	}
+
+	// Read the response body
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Parse the JSON response into a slice of SmartLightData (since the response is an array)
+	var data []SprinklerData
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	// Remove duplicates based on DeviceId
+	uniqueData := make([]SprinklerData, 0)
+	seenDevices := make(map[string]bool)
+
+	for _, item := range data {
+		if !seenDevices[item.Tags.DeviceId] {
+			uniqueData = append(uniqueData, item)
+			seenDevices[item.Tags.DeviceId] = true
+		}
+	}
+
+	// Return the filtered data
+	return uniqueData, nil
+}
+
+type SoilMoisture3DepthLevelsFields struct {
+	BoardVoltage            float64 `json:"boardVoltage"`
+	Data                    string  `json:"data"`
+	FCnt                    float64 `json:"fCnt"`
+	FPort                   float64 `json:"fPort"`
+	RxAlt_0                 float64 `json:"rxAlt_0"`
+	RxLat_0                 float64 `json:"rxLat_0"`
+	RxLon_0                 float64 `json:"rxLon_0"`
+	RxRssi_0                float64 `json:"rxRssi_0"`
+	RxSnr_0                 float64 `json:"rxSnr_0"`
+	SoilMoistureDepthLevel1 float64 `json:"soilMoistureDepthLevel1"`
+	SoilMoistureDepthLevel2 float64 `json:"soilMoistureDepthLevel2"`
+	SoilMoistureDepthLevel3 float64 `json:"soilMoistureDepthLevel3"`
+	TxBandWidth             float64 `json:"txBandWidth"`
+	TxFrequency             float64 `json:"txFrequency"`
+	TxSpreadFactor          float64 `json:"txSpreadFactor"`
+}
+
+type SoilMoisture3DepthLevelsData struct {
+	Fields    SoilMoisture3DepthLevelsFields `json:"fields"`
+	Name      string                         `json:"name"`
+	Tags      Tags                           `json:"tags"`
+	Timestamp float64                        `json:"timestamp"`
+}
+
+func fetchSoilMoisture3DepthLevels() ([]SoilMoisture3DepthLevelsData, error) {
+	// API URL
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/LNS/SoilMoisture3DepthLevels/all?interval=30"
+
+	// Create a custom HTTP client that doesn't verify SSL certificates
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Disable SSL verification
+			},
+		},
+		Timeout: 30 * time.Second, // Optional timeout for the request
+	}
+
+	// Make the HTTP GET request
+	response, err := client.Get(apiUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check for successful HTTP response status
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	}
+
+	// Read the response body
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Parse the JSON response into a slice of SmartLightData (since the response is an array)
+	var data []SoilMoisture3DepthLevelsData
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	// Remove duplicates based on DeviceId
+	uniqueData := make([]SoilMoisture3DepthLevelsData, 0)
+	seenDevices := make(map[string]bool)
+
+	for _, item := range data {
+		if !seenDevices[item.Tags.DeviceId] {
+			uniqueData = append(uniqueData, item)
+			seenDevices[item.Tags.DeviceId] = true
+		}
+	}
+
+	// Return the filtered data
+	return uniqueData, nil
+}
+
 func fetchUsers() ([]UserData, []Alarm, error) {
 	// err := godotenv.Load()
 	// if err != nil {
@@ -585,6 +744,14 @@ func AlarmMessages() []Message {
 	if err != nil {
 		log.Fatalf("Error fetching weatherstation data: %v", err)
 	}
+	sprinklerData, err := fetchSprinkler()
+	if err != nil {
+		log.Fatalf("Error fetching sprinkler data: %v", err)
+	}
+	soilMoisture3DepthLevelsData, err := fetchSoilMoisture3DepthLevels()
+	if err != nil {
+		log.Fatalf("Error fetching soil moisture data: %v", err)
+	}
 
 	userData, Alarms, userError := fetchUsers()
 	if userError != nil {
@@ -618,7 +785,7 @@ func AlarmMessages() []Message {
 		dataTriggerType := message.MessageAlarm.TriggerType
 		deviceId := message.MessageAlarm.Deveui
 		trigger, _ := strconv.ParseFloat(message.MessageAlarm.Trigger, 64)
-		triggerBool, _ := strconv.ParseBool(message.MessageAlarm.Trigger)
+		triggerBool, _ := strconv.ParseBool(message.MessageAlarm.TriggerAt)
 		triggerAt := message.MessageAlarm.TriggerAt
 		var currentValue *float64
 		var currentBool *bool
@@ -823,7 +990,86 @@ func AlarmMessages() []Message {
 					canAddToMessages = true
 				}
 			}
+		case "Sprinkler":
+			{
+				var dataToPass SprinklerData
+				for _, sprinkler := range sprinklerData {
+					if sprinkler.Tags.DeviceId == deviceId {
+						dataToPass = sprinkler
+					}
+				}
+
+				switch dataTriggerType {
+				case "boardVoltage":
+					{
+						currentValue = &dataToPass.Fields.BoardVoltage
+					}
+				case "counter":
+					{
+						currentValue = &dataToPass.Fields.Counter
+					}
+				case "solenoid1":
+					{
+						currentBool = &dataToPass.Fields.Solenoid1
+					}
+				case "solenoid2":
+					{
+						currentBool = &dataToPass.Fields.Solenoid2
+					}
+				case "solenoid3":
+					{
+						currentBool = &dataToPass.Fields.Solenoid3
+					}
+				}
+				if triggerAt == "higher" && trigger < *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "lower" && trigger > *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "true" && triggerBool && *currentBool {
+					canAddToMessages = true
+				} else if triggerAt == "false" && !triggerBool && !*currentBool {
+					canAddToMessages = true
+				}
+			}
+
+		case "SoilMoisture3DepthLevels":
+			{
+				var dataToPass SoilMoisture3DepthLevelsData
+				for _, soilMoisture := range soilMoisture3DepthLevelsData {
+					if soilMoisture.Tags.DeviceId == deviceId {
+						soilMoisture.Fields.SoilMoistureDepthLevel1 /= 100
+						soilMoisture.Fields.SoilMoistureDepthLevel2 /= 100
+						soilMoisture.Fields.SoilMoistureDepthLevel3 /= 100
+						dataToPass = soilMoisture
+					}
+				}
+
+				switch dataTriggerType {
+				case "boardVoltage":
+					{
+						currentValue = &dataToPass.Fields.BoardVoltage
+					}
+				case "soilMoistureDepthLevel1":
+					{
+						currentValue = &dataToPass.Fields.SoilMoistureDepthLevel1
+					}
+				case "soilMoistureDepthLevel2":
+					{
+						currentValue = &dataToPass.Fields.SoilMoistureDepthLevel2
+					}
+				case "soilMoistureDepthLevel3":
+					{
+						currentValue = &dataToPass.Fields.SoilMoistureDepthLevel3
+					}
+				}
+				if triggerAt == "higher" && trigger < *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "lower" && trigger > *currentValue {
+					canAddToMessages = true
+				}
+			}
 		}
+
 		if canAddToMessages {
 			if currentValue != nil {
 				messageToSave.CurrentValue = fmt.Sprintf("%v", *currentValue)
@@ -833,7 +1079,6 @@ func AlarmMessages() []Message {
 			finalMessages = append(finalMessages, messageToSave)
 		}
 	}
-
 	// Places new lastPlayed value on database
 	for _, finalMessage := range finalMessages {
 		if finalMessage.MessageAlarm.LastPlayed == "0" {
@@ -869,12 +1114,12 @@ func main() {
 
 			for _, message := range messages {
 				phoneNumber := "55" + message.Phone
-        var triggerAt string
-        if (message.MessageAlarm.TriggerAt == "higher") {
-          triggerAt = "acima"
-        } else {
-          triggerAt = "abaixo"
-        }
+				var triggerAt string
+				if message.MessageAlarm.TriggerAt == "higher" {
+					triggerAt = "acima"
+				} else {
+					triggerAt = "abaixo"
+				}
 
 				// POST payload
 				payload := map[string]interface{}{
