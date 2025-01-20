@@ -1216,8 +1216,65 @@ func main() {
 				} else {
 					fmt.Printf("Message sent to %s with success!\n", phoneNumber)
 				}
-			}
 
+				// Actuators
+				var action string
+				if message.MessageAlarm.ActionSensor == "sprinklersOn" {
+					action = "AFQ="
+				} else if message.MessageAlarm.ActionSensor == "sprinklersOff" {
+					action = "AKg="
+				} else {
+					action = ""
+				}
+
+				// Create payload
+				payload = map[string]interface{}{
+					"application": "SmartLight",          // Application Name registered in the corresponding NetworkServer
+					"etc":         "imt",                 // NetworkServer to be queued
+					"reference":   "test-node-red",       // Reference
+					"deviceId":    "0004a30b00e94314",    // Device ID
+					"confirmed":   false,                 // Confirmed flag
+					"fPort":       100,                   // lora downlink fPort
+					"data":        action,                // Downlink data
+					"timestamp":   time.Now().UnixNano(), // Current timestamp in nanoseconds
+				}
+
+				jsonData, err := json.Marshal(payload)
+				if err != nil {
+					fmt.Println("Error marshalling JSON:", err)
+					return
+				}
+
+				url = "https://smartcampus-k8s.maua.br/api/ingestion/v0.1/IMT/LNS/Command/all"
+
+				req, err = http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+				if err != nil {
+					fmt.Println("Error creating request:", err)
+					return
+				}
+
+				req.Header.Set("Content-Type", "application/json")
+
+				client = &http.Client{}
+				resp, err = client.Do(req)
+				if err != nil {
+					fmt.Println("Error making request:", err)
+					return
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode == http.StatusOK {
+					var responseData map[string]interface{}
+					if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
+						fmt.Println("Error decoding response:", err)
+						return
+					}
+					fmt.Println("Response:", responseData)
+					fmt.Println("Post OK!")
+				} else {
+					fmt.Printf("HTTP Error: %d\n", resp.StatusCode)
+				}
+			}
 			updateAlarmAlreadyPlayedOnSupabase(messages)
 		}
 	}
