@@ -761,6 +761,8 @@ func AlarmMessages() []Message {
 	layout := "2006-01-02 15:04:05.999999999-07:00"
 	timeNow := time.Now().Format("2006-01-02 15:04:05.999999999-07:00")
 	var lastPlayedTime time.Time
+	alarmTimeEnv := os.Getenv("ALARM_TIMER")
+	alarmTime, _ := strconv.Atoi(alarmTimeEnv)
 	for _, item := range userData {
 		for _, alarm := range Alarms {
 			if alarm.LastPlayed != "0" {
@@ -769,7 +771,7 @@ func AlarmMessages() []Message {
 			if err != nil {
 				fmt.Printf("Error getting lastPlayed: %v \n", err)
 			}
-			if alarm.AlreadyPlayed && time.Since(lastPlayedTime) >= 1*time.Hour {
+			if alarm.AlreadyPlayed && time.Since(lastPlayedTime) >= time.Duration(alarmTime)*time.Second {
 				alarm.AlreadyPlayed = false
 				db.Exec(`UPDATE "Alarms" SET "alreadyPlayed" = $1 WHERE "id" = $2`, alarm.AlreadyPlayed, alarm.Id)
 			}
@@ -1074,7 +1076,11 @@ func AlarmMessages() []Message {
 			if currentValue != nil {
 				messageToSave.CurrentValue = fmt.Sprintf("%v", *currentValue)
 			} else {
-				messageToSave.CurrentValue = fmt.Sprintf("%v", *currentBool)
+				if *currentBool {
+					messageToSave.CurrentValue = "Verdadeiro"
+				} else {
+					messageToSave.CurrentValue = "Falso"
+				}
 			}
 			finalMessages = append(finalMessages, messageToSave)
 		}
@@ -1098,7 +1104,9 @@ func AlarmMessages() []Message {
 }
 
 func main() {
-	ticker := time.NewTicker(1 * time.Minute)
+	tickerTimeEnv := os.Getenv("TICKER_TIME")
+	tickerTime, _ := strconv.Atoi(tickerTimeEnv)
+	ticker := time.NewTicker(time.Duration(tickerTime) * time.Second)
 	for {
 		select {
 		case <-ticker.C:
@@ -1114,38 +1122,68 @@ func main() {
 
 			for _, message := range messages {
 				phoneNumber := "55" + message.Phone
-				var triggerAt string
-				if message.MessageAlarm.TriggerAt == "higher" {
-					triggerAt = "acima"
-				} else {
-					triggerAt = "abaixo"
-				}
+				var payload map[string]interface{}
 
-				// POST payload
-				payload := map[string]interface{}{
-					"messaging_product": "whatsapp",
-					"to":                phoneNumber,
-					"type":              "template",
-					"template": map[string]interface{}{
-						"name": "alerta_smart",
-						"language": map[string]string{
-							"code": "pt_BR",
-						},
-						"components": []map[string]interface{}{
-							{
-								"type": "body",
-								"parameters": []map[string]string{
-									{"type": "text", "text": message.MessageAlarm.Type},
-									{"type": "text", "text": message.MessageAlarm.Deveui},
-									{"type": "text", "text": message.MessageAlarm.Local},
-									{"type": "text", "text": message.MessageAlarm.TriggerType},
-									{"type": "text", "text": triggerAt},
-									{"type": "text", "text": message.CurrentValue},
-									{"type": "text", "text": message.MessageAlarm.Trigger},
+				if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso" {
+					// POST payload
+					payload = map[string]interface{}{
+						"messaging_product": "whatsapp",
+						"to":                phoneNumber,
+						"type":              "template",
+						"template": map[string]interface{}{
+							"name": "alarme_bool",
+							"language": map[string]string{
+								"code": "pt_BR",
+							},
+							"components": []map[string]interface{}{
+								{
+									"type": "body",
+									"parameters": []map[string]string{
+										{"type": "text", "text": message.MessageAlarm.Type},
+										{"type": "text", "text": message.MessageAlarm.Deveui},
+										{"type": "text", "text": message.MessageAlarm.Local},
+										{"type": "text", "text": message.MessageAlarm.TriggerType},
+										{"type": "text", "text": message.CurrentValue},
+										{"type": "text", "text": message.CurrentValue},
+									},
 								},
 							},
 						},
-					},
+					}
+				} else {
+					var triggerAt string
+					if message.MessageAlarm.TriggerAt == "higher" {
+						triggerAt = "acima"
+					} else {
+						triggerAt = "abaixo"
+					}
+
+					// POST payload
+					payload = map[string]interface{}{
+						"messaging_product": "whatsapp",
+						"to":                phoneNumber,
+						"type":              "template",
+						"template": map[string]interface{}{
+							"name": "alerta_smart",
+							"language": map[string]string{
+								"code": "pt_BR",
+							},
+							"components": []map[string]interface{}{
+								{
+									"type": "body",
+									"parameters": []map[string]string{
+										{"type": "text", "text": message.MessageAlarm.Type},
+										{"type": "text", "text": message.MessageAlarm.Deveui},
+										{"type": "text", "text": message.MessageAlarm.Local},
+										{"type": "text", "text": message.MessageAlarm.TriggerType},
+										{"type": "text", "text": triggerAt},
+										{"type": "text", "text": message.CurrentValue},
+										{"type": "text", "text": message.MessageAlarm.Trigger},
+									},
+								},
+							},
+						},
+					}
 				}
 
 				jsonPayload, err := json.Marshal(payload)
