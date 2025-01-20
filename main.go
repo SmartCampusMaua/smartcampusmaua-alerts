@@ -1227,7 +1227,6 @@ func main() {
 					action = ""
 				}
 
-				// Create payload
 				payload = map[string]interface{}{
 					"application": "SmartLight",          // Application Name registered in the corresponding NetworkServer
 					"etc":         "imt",                 // NetworkServer to be queued
@@ -1246,6 +1245,55 @@ func main() {
 				}
 
 				url = "https://smartcampus-k8s.maua.br/api/ingestion/v0.1/IMT/LNS/Command/all"
+
+				req, err = http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+				if err != nil {
+					fmt.Println("Error creating request:", err)
+					return
+				}
+
+				req.Header.Set("Content-Type", "application/json")
+
+				client = &http.Client{}
+				resp, err = client.Do(req)
+				if err != nil {
+					fmt.Println("Error making request:", err)
+					return
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode == http.StatusOK {
+					var responseData map[string]interface{}
+					if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
+						fmt.Println("Error decoding response:", err)
+						return
+					}
+					fmt.Println("Response:", responseData)
+					fmt.Println("Post OK!")
+				} else {
+					fmt.Printf("HTTP Error: %d\n", resp.StatusCode)
+				}
+
+				// Alert
+				payload = map[string]interface{}{
+					"deviceId":  message.MessageAlarm.Deveui, // Device ID
+					"triggerAt": message.MessageAlarm.TriggerAt,
+					"triggerType": message.MessageAlarm.TriggerType,
+					"lastPlayed": message.MessageAlarm.LastPlayed,
+					"actionSensor": message.MessageAlarm.ActionSensor,
+					"currentValue": message.CurrentValue,
+					"data":      "Alert SmartCampus",         // Downlink data
+					"timestamp": time.Now().UnixNano(),       // Current timestamp in nanoseconds
+					"etc":       "imt",                       // NetworkServer to be queued
+				}
+
+				jsonData, err = json.Marshal(payload)
+				if err != nil {
+					fmt.Println("Error marshalling JSON:", err)
+					return
+				}
+
+				url = "https://smartcampus-k8s.maua.br/api/ingestion/v0.1/IMT/LNS/Alert/all"
 
 				req, err = http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 				if err != nil {
