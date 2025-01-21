@@ -362,7 +362,7 @@ type WeatherStationFields struct {
 	EnvSensorFailStatus    bool    `json:"envSensorFailStatus"`
 	FCnt                   float64 `json:"fCnt"`
 	FPort                  float64 `json:"fPort"`
-	FirmwareVersion        uint64
+	FirmwareVersion        int64   `json:"firmwareVersion"`
 	InternalBatteryVoltage float64 `json:"internalBatteryVoltage"`
 	InternalHumidity       float64 `json:"internalHumidity"`
 	InternalTemperature    float64 `json:"internalTemperature"`
@@ -682,14 +682,14 @@ func updateAlarmAlreadyPlayedOnSupabase(messages []Message) {
 }
 
 type UserData struct {
-	Id     int64  `json:"id"`
+	Id     int64   `json:"id"`
 	Phone  string `json:"phone"`
 	Alarms Alarm
 }
 
 type Alarm struct {
-	Id            int8   `json:"id"`
-	UserId        int8   `json:"userId"`
+	Id            int64   `json:"id"`
+	UserId        int64   `json:"userId"`
 	Type          string `json:"type"`
 	Local         string `json:"local"`
 	Deveui        string `json:"deveui"`
@@ -1276,15 +1276,15 @@ func main() {
 
 				// Alert
 				payload = map[string]interface{}{
-					"deviceId":  message.MessageAlarm.Deveui, // Device ID
-					"triggerAt": message.MessageAlarm.TriggerAt,
-					"triggerType": message.MessageAlarm.TriggerType,
-					"lastPlayed": message.MessageAlarm.LastPlayed,
+					"deviceId":     message.MessageAlarm.Deveui, // Device ID
+					"triggerAt":    message.MessageAlarm.TriggerAt,
+					"triggerType":  message.MessageAlarm.TriggerType,
+					"lastPlayed":   message.MessageAlarm.LastPlayed,
 					"actionSensor": message.MessageAlarm.ActionSensor,
 					"currentValue": message.CurrentValue,
-					"data":      "Alert SmartCampus",         // Downlink data
-					"timestamp": time.Now().UnixNano(),       // Current timestamp in nanoseconds
-					"etc":       "imt",                       // NetworkServer to be queued
+					"data":         "Alert SmartCampus",   // Downlink data
+					"timestamp":    time.Now().UnixNano(), // Current timestamp in nanoseconds
+					"etc":          "imt",                 // NetworkServer to be queued
 				}
 
 				jsonData, err = json.Marshal(payload)
