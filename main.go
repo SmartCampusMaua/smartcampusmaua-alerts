@@ -692,7 +692,7 @@ type Alarm struct {
 	UserId        int64  `json:"userId"`
 	Type          string `json:"type"`
 	Local         string `json:"local"`
-	DeviceId        string `json:"deveui"`
+	DeviceId      string `json:"deveui"`
 	Trigger       string `json:"trigger"`
 	TriggerAt     string `json:"triggerAt"`
 	TriggerType   string `json:"triggerType"`
@@ -1275,7 +1275,19 @@ func main() {
 				}
 
 				// Alert
+				var deviceType string
+				var measurement string
+				if message.MessageAlarm.Type == "Evse" {
+					deviceType = "EVSE"
+					measurement = "MeterValues"
+				} else {
+					deviceType = "LNS"
+					measurement = message.MessageAlarm.Type
+				}
+
 				payload = map[string]interface{}{
+					"deviceType":   deviceType,                    // LNS, EVSE
+					"measurement":  measurement,                   // SmartLight, WeatherStation
 					"deviceId":     message.MessageAlarm.DeviceId, // Device ID
 					"triggerAt":    message.MessageAlarm.TriggerAt,
 					"triggerType":  message.MessageAlarm.TriggerType,
