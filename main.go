@@ -647,7 +647,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 	for alarmRows.Next() {
 		var loc Alarm
 
-		err := alarmRows.Scan(&loc.Id, &loc.UserId, &loc.Type, &loc.Local, &loc.Deveui, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed, &loc.LastPlayed, &loc.ActionSensor)
+		err := alarmRows.Scan(&loc.Id, &loc.UserId, &loc.Type, &loc.Local, &loc.DeviceId, &loc.Trigger, &loc.TriggerAt, &loc.TriggerType, &loc.AlreadyPlayed, &loc.LastPlayed, &loc.ActionSensor)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error scanning alarm row: %v", err)
 		}
@@ -682,17 +682,17 @@ func updateAlarmAlreadyPlayedOnSupabase(messages []Message) {
 }
 
 type UserData struct {
-	Id     int64   `json:"id"`
+	Id     int64  `json:"id"`
 	Phone  string `json:"phone"`
 	Alarms Alarm
 }
 
 type Alarm struct {
-	Id            int64   `json:"id"`
-	UserId        int64   `json:"userId"`
+	Id            int64  `json:"id"`
+	UserId        int64  `json:"userId"`
 	Type          string `json:"type"`
 	Local         string `json:"local"`
-	Deveui        string `json:"deveui"`
+	DeviceId      string `json:"deveui"`
 	Trigger       string `json:"trigger"`
 	TriggerAt     string `json:"triggerAt"`
 	TriggerType   string `json:"triggerType"`
@@ -785,7 +785,7 @@ func AlarmMessages() []Message {
 	for _, message := range messages {
 		dataType := message.MessageAlarm.Type
 		dataTriggerType := message.MessageAlarm.TriggerType
-		deviceId := message.MessageAlarm.Deveui
+		deviceId := message.MessageAlarm.DeviceId
 		trigger, _ := strconv.ParseFloat(message.MessageAlarm.Trigger, 64)
 		triggerBool, _ := strconv.ParseBool(message.MessageAlarm.TriggerAt)
 		triggerAt := message.MessageAlarm.TriggerAt
@@ -1094,7 +1094,7 @@ func AlarmMessages() []Message {
 			}
 		}
 		// Alarm_History always has alreadyPlayed as false due to the order of inserts, may need to fix in the future if history needs change
-		_, alarmsHistoryErr := db.Exec(`INSERT INTO "Alarms_History" ("id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "lastPlayed", "currentValue", "actionSensor") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, finalMessage.MessageAlarm.Id, finalMessage.MessageAlarm.UserId, finalMessage.MessageAlarm.Type, finalMessage.MessageAlarm.Local, finalMessage.MessageAlarm.Deveui, finalMessage.MessageAlarm.Trigger, finalMessage.MessageAlarm.TriggerAt, finalMessage.MessageAlarm.TriggerType, timeNow, finalMessage.CurrentValue, finalMessage.MessageAlarm.ActionSensor)
+		_, alarmsHistoryErr := db.Exec(`INSERT INTO "Alarms_History" ("id", "userId", "type", "local", "deveui", "trigger", "triggerAt", "triggerType", "lastPlayed", "currentValue", "actionSensor") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, finalMessage.MessageAlarm.Id, finalMessage.MessageAlarm.UserId, finalMessage.MessageAlarm.Type, finalMessage.MessageAlarm.Local, finalMessage.MessageAlarm.DeviceId, finalMessage.MessageAlarm.Trigger, finalMessage.MessageAlarm.TriggerAt, finalMessage.MessageAlarm.TriggerType, timeNow, finalMessage.CurrentValue, finalMessage.MessageAlarm.ActionSensor)
 		if alarmsHistoryErr != nil {
 			fmt.Printf("insert alarmHistory error: %v\n", alarmsHistoryErr)
 		}
@@ -1140,7 +1140,7 @@ func main() {
 									"type": "body",
 									"parameters": []map[string]string{
 										{"type": "text", "text": message.MessageAlarm.Type},
-										{"type": "text", "text": message.MessageAlarm.Deveui},
+										{"type": "text", "text": message.MessageAlarm.DeviceId},
 										{"type": "text", "text": message.MessageAlarm.Local},
 										{"type": "text", "text": message.MessageAlarm.TriggerType},
 										{"type": "text", "text": message.CurrentValue},
@@ -1173,7 +1173,7 @@ func main() {
 									"type": "body",
 									"parameters": []map[string]string{
 										{"type": "text", "text": message.MessageAlarm.Type},
-										{"type": "text", "text": message.MessageAlarm.Deveui},
+										{"type": "text", "text": message.MessageAlarm.DeviceId},
 										{"type": "text", "text": message.MessageAlarm.Local},
 										{"type": "text", "text": message.MessageAlarm.TriggerType},
 										{"type": "text", "text": triggerAt},
@@ -1275,8 +1275,20 @@ func main() {
 				}
 
 				// Alert
+				var deviceType string
+				var measurement string
+				if message.MessageAlarm.Type == "Evse" {
+					deviceType = "EVSE"
+					measurement = "MeterValues"
+				} else {
+					deviceType = "LNS"
+					measurement = message.MessageAlarm.Type
+				}
+
 				payload = map[string]interface{}{
-					"deviceId":     message.MessageAlarm.Deveui, // Device ID
+					"deviceType":   deviceType,                    // LNS, EVSE
+					"measurement":  measurement,                   // SmartLight, WeatherStation
+					"deviceId":     message.MessageAlarm.DeviceId, // Device ID
 					"triggerAt":    message.MessageAlarm.TriggerAt,
 					"triggerType":  message.MessageAlarm.TriggerType,
 					"lastPlayed":   message.MessageAlarm.LastPlayed,
