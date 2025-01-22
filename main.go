@@ -1554,6 +1554,7 @@ func main() {
 					"deviceType":   deviceType,                    // LNS, EVSE
 					"measurement":  measurement,                   // SmartLight, WeatherStation
 					"deviceId":     message.MessageAlarm.DeviceId, // Device ID
+          "trigger" : message.MessageAlarm.Trigger,
 					"triggerAt":    message.MessageAlarm.TriggerAt,
 					"triggerType":  message.MessageAlarm.TriggerType,
 					"lastPlayed":   message.MessageAlarm.LastPlayed,
