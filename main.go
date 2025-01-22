@@ -27,6 +27,7 @@ type Tags struct {
 	TxCodeRate   string `json:"txCodeRate"`
 	TxModulation string `json:"txModulation"`
 	Type         string `json:"type"`
+	Status       string `json:"status"`
 }
 
 type SmartLightFields struct {
@@ -597,6 +598,72 @@ func fetchSoilMoisture3DepthLevels() ([]SoilMoisture3DepthLevelsData, error) {
 	return uniqueData, nil
 }
 
+type EvseStatusNotificationFields struct {
+	// Info						float64 `json:"info"`
+	ErrorCode string `json:"errorCode"`
+}
+
+type EvseStatusNotificationData struct {
+	Fields    EvseStatusNotificationFields `json:"fields"`
+	Name      string                       `json:"name"`
+	Tags      Tags                         `json:"tags"`
+	Timestamp float64                      `json:"timestamp"`
+}
+
+func fetchEvseStatusNotification() ([]EvseStatusNotificationData, error) {
+	// API URL
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/EVSE/StatusNotification/all?interval=30000"
+
+	// Create a custom HTTP client that doesn't verify SSL certificates
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Disable SSL verification
+			},
+		},
+		Timeout: 30 * time.Second, // Optional timeout for the request
+	}
+
+	// Make the HTTP GET request
+	response, err := client.Get(apiUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check for successful HTTP response status
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	}
+
+	// Read the response body
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Parse the JSON response into a slice of EvseStatusNotificationData (since the response is an array)
+	var data []EvseStatusNotificationData
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	// Remove duplicates based on DeviceId
+	uniqueData := make([]EvseStatusNotificationData, 0)
+	seenDevices := make(map[string]bool)
+
+	for _, item := range data {
+		if !seenDevices[item.Tags.DeviceId] {
+			uniqueData = append(uniqueData, item)
+			seenDevices[item.Tags.DeviceId] = true
+		}
+	}
+
+	// Return the filtered data
+	return uniqueData, nil
+}
+
 func fetchUsers() ([]UserData, []Alarm, error) {
 	// err := godotenv.Load()
 	// if err != nil {
@@ -753,6 +820,11 @@ func AlarmMessages() []Message {
 		log.Fatalf("Error fetching soil moisture data: %v", err)
 	}
 
+	evseStatusNotificationData, err := fetchEvseStatusNotification()
+	if err != nil {
+		log.Fatalf("Error fetching evseStatusNotification data: %v", err)
+	}
+
 	userData, Alarms, userError := fetchUsers()
 	if userError != nil {
 		log.Fatalf("Error fetching data: %v", userError)
@@ -791,6 +863,7 @@ func AlarmMessages() []Message {
 		triggerAt := message.MessageAlarm.TriggerAt
 		var currentValue *float64
 		var currentBool *bool
+		var currentString *string
 		var canAddToMessages = false
 		messageToSave := message
 
@@ -992,6 +1065,7 @@ func AlarmMessages() []Message {
 					canAddToMessages = true
 				}
 			}
+
 		case "Sprinkler":
 			{
 				var dataToPass SprinklerData
@@ -1070,17 +1144,45 @@ func AlarmMessages() []Message {
 					canAddToMessages = true
 				}
 			}
+
+		// 		case "stopTime":
+		// 			{
+		// 				currentValue = &dataToPass.Fields.StopTime
+		// 			}
+		// 		}
+		// 	}
+		case "Evse":
+			{
+				var dataToPass EvseStatusNotificationData
+				for _, evseStatusNotification := range evseStatusNotificationData {
+					if evseStatusNotification.Tags.DeviceId == deviceId {
+						dataToPass = evseStatusNotification
+					}
+				}
+
+				switch dataTriggerType {
+				case "status":
+					{
+						currentString = &dataToPass.Tags.Status
+					}
+				}
+				if *currentString == "Available" {
+					canAddToMessages = true
+				}
+			}
 		}
 
 		if canAddToMessages {
 			if currentValue != nil {
 				messageToSave.CurrentValue = fmt.Sprintf("%v", *currentValue)
-			} else {
+			} else if currentBool != nil {
 				if *currentBool {
 					messageToSave.CurrentValue = "Verdadeiro"
 				} else {
 					messageToSave.CurrentValue = "Falso"
 				}
+			} else {
+				messageToSave.CurrentValue = "Disponível"
 			}
 			finalMessages = append(finalMessages, messageToSave)
 		}
@@ -1124,7 +1226,7 @@ func main() {
 				phoneNumber := "55" + message.Phone
 				var payload map[string]interface{}
 
-				if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso" {
+				if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso" || message.MessageAlarm.Type == "Evse" {
 					// POST payload
 					payload = map[string]interface{}{
 						"messaging_product": "whatsapp",
@@ -1289,7 +1391,7 @@ func main() {
 					"deviceType":   deviceType,                    // LNS, EVSE
 					"measurement":  measurement,                   // SmartLight, WeatherStation
 					"deviceId":     message.MessageAlarm.DeviceId, // Device ID
-          "trigger" : message.MessageAlarm.Trigger,
+					"trigger":      message.MessageAlarm.Trigger,
 					"triggerAt":    message.MessageAlarm.TriggerAt,
 					"triggerType":  message.MessageAlarm.TriggerType,
 					"lastPlayed":   message.MessageAlarm.LastPlayed,
