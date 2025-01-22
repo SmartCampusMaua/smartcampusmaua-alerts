@@ -612,7 +612,7 @@ type EvseStatusNotificationData struct {
 
 func fetchEvseStatusNotification() ([]EvseStatusNotificationData, error) {
 	// API URL
-	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/EVSE/StatusNotification/all?interval=30000"
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/EVSE/StatusNotification/all?interval=57600" // 40 days
 
 	// Create a custom HTTP client that doesn't verify SSL certificates
 	client := &http.Client{
@@ -1226,7 +1226,30 @@ func main() {
 				phoneNumber := "55" + message.Phone
 				var payload map[string]interface{}
 
-				if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso" || message.MessageAlarm.Type == "Evse" {
+				if message.MessageAlarm.Type == "Evse" {
+					// POST payload
+					payload = map[string]interface{}{
+						"messaging_product": "whatsapp",
+						"to":                phoneNumber,
+						"type":              "template",
+						"template": map[string]interface{}{
+							"name": "evse",
+							"language": map[string]string{
+								"code": "pt_BR",
+							},
+							"components": []map[string]interface{}{
+								{
+									"type": "body",
+									"parameters": []map[string]string{
+										{"type": "text", "text": message.MessageAlarm.Type},
+										{"type": "text", "text": message.MessageAlarm.DeviceId},
+										{"type": "text", "text": message.MessageAlarm.Local},
+									},
+								},
+							},
+						},
+					}
+				} else if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso"{
 					// POST payload
 					payload = map[string]interface{}{
 						"messaging_product": "whatsapp",
