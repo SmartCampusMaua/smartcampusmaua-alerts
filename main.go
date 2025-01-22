@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"crypto/tls"
 	"database/sql"
@@ -1249,7 +1250,7 @@ func main() {
 							},
 						},
 					}
-				} else if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso"{
+				} else if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso" {
 					// POST payload
 					payload = map[string]interface{}{
 						"messaging_product": "whatsapp",
@@ -1431,7 +1432,12 @@ func main() {
 					return
 				}
 
-				url = "https://smartcampus-k8s.maua.br/api/ingestion/v0.1/IMT/LNS/Alert/all"
+				var sbUrl strings.Builder
+				sbUrl.WriteString(`https://smartcampus-k8s.maua.br/api/ingestion/v0.1/IMT/`)
+				sbUrl.WriteString(deviceType)
+				sbUrl.WriteString(`/Alert/all`)
+
+				url = sbUrl.String()
 
 				req, err = http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 				if err != nil {
