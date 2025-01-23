@@ -665,6 +665,76 @@ func fetchEvseStatusNotification() ([]EvseStatusNotificationData, error) {
 	return uniqueData, nil
 }
 
+type VibrationAverageFields struct {
+	BoardVoltage   		float64 `json:"boardVoltage"`
+	Humidity       		float64 `json:"humidity"`
+	Temperature    		float64 `json:"temperature"`
+	VibrationAverageX float64 `json:"vibrationAverageX"`
+	VibrationAverageY float64 `json:"vibrationAverageY"`
+	VibrationAverageZ float64 `json:"vibrationAverageZ"`
+}
+
+type VibrationAverageData struct {
+	Fields    VibrationAverageFields `json:"fields"`
+	Name      string           `json:"name"`
+	Tags      Tags             `json:"tags"`
+	Timestamp float64          `json:"timestamp"`
+}
+
+func fetchVibrationAverage() ([]VibrationAverageData, error) {
+	// API URL
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/LNS/VibrationAverage/all?interval=30"
+
+	// Create a custom HTTP client that doesn't verify SSL certificates
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Disable SSL verification
+			},
+		},
+		Timeout: 30 * time.Second, // Optional timeout for the request
+	}
+
+	// Make the HTTP GET request
+	response, err := client.Get(apiUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check for successful HTTP response status
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	}
+
+	// Read the response body
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Parse the JSON response into a slice of VibrationAverageData (since the response is an array)
+	var data []VibrationAverageData
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	// Remove duplicates based on DeviceId
+	uniqueData := make([]VibrationAverageData, 0)
+	seenDevices := make(map[string]bool)
+
+	for _, item := range data {
+		if !seenDevices[item.Tags.DeviceId] {
+			uniqueData = append(uniqueData, item)
+			seenDevices[item.Tags.DeviceId] = true
+		}
+	}
+
+	// Return the filtered data
+	return uniqueData, nil
+}
+
 func fetchUsers() ([]UserData, []Alarm, error) {
 	// err := godotenv.Load()
 	// if err != nil {
@@ -820,10 +890,13 @@ func AlarmMessages() []Message {
 	if err != nil {
 		log.Fatalf("Error fetching soil moisture data: %v", err)
 	}
-
 	evseStatusNotificationData, err := fetchEvseStatusNotification()
 	if err != nil {
 		log.Fatalf("Error fetching evseStatusNotification data: %v", err)
+	}
+	vibrationAverageData, err := fetchVibrationAverage()
+	if err != nil {
+		log.Fatalf("Error fetching vibrationAverage data: %v", err)
 	}
 
 	userData, Alarms, userError := fetchUsers()
@@ -1145,13 +1218,6 @@ func AlarmMessages() []Message {
 					canAddToMessages = true
 				}
 			}
-
-		// 		case "stopTime":
-		// 			{
-		// 				currentValue = &dataToPass.Fields.StopTime
-		// 			}
-		// 		}
-		// 	}
 		case "Evse":
 			{
 				var dataToPass EvseStatusNotificationData
@@ -1168,6 +1234,48 @@ func AlarmMessages() []Message {
 					}
 				}
 				if *currentString == "Available" {
+					canAddToMessages = true
+				}
+			}
+
+		case "VibrationAverage":
+			{
+				var dataToPass VibrationAverageData
+				for _, vibrationAverage := range vibrationAverageData {
+					if vibrationAverage.Tags.DeviceId == deviceId {
+						dataToPass = vibrationAverage
+					}
+				}
+
+				switch dataTriggerType {
+				case "boardVoltage":
+					{
+						currentValue = &dataToPass.Fields.BoardVoltage
+					}
+				case "humidity":
+					{
+						currentValue = &dataToPass.Fields.Humidity
+					}
+				case "temperature":
+					{
+						currentValue = &dataToPass.Fields.Temperature
+					}
+				case "vibrationAverageX":
+					{
+						currentValue = &dataToPass.Fields.VibrationAverageX
+					}
+				case "vibrationAverageY":
+					{
+						currentValue = &dataToPass.Fields.VibrationAverageY
+					}
+				case "vibrationAverageZ":
+					{
+						currentValue = &dataToPass.Fields.VibrationAverageZ
+					}
+				}
+				if triggerAt == "higher" && trigger < *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "lower" && trigger > *currentValue {
 					canAddToMessages = true
 				}
 			}
@@ -1245,6 +1353,49 @@ func main() {
 										{"type": "text", "text": message.MessageAlarm.Type},
 										{"type": "text", "text": message.MessageAlarm.DeviceId},
 										{"type": "text", "text": message.MessageAlarm.Local},
+									},
+								},
+							},
+						},
+					}
+				} else if message.MessageAlarm.Type == "VibrationAverage" {
+					var triggerAt string
+					if message.MessageAlarm.TriggerAt == "higher" {
+						triggerAt = "acima"
+					} else {
+						triggerAt = "abaixo"
+					}
+					var messageText string
+					if (message.MessageAlarm.TriggerType == "vibrationAverageX") {
+						messageText = "FREADA/ACELERAÇÃO BRUSCA";
+					} else if (message.MessageAlarm.TriggerType == "vibrationAverageY"){
+						messageText = "DIREÇÃO PERIGOSA";
+					}	else if (message.MessageAlarm.TriggerType == "vibrationAverageZ"){
+						messageText = "VIA COM BURACO";
+					}	else {
+						messageText = "SENSOR";
+					}
+					// POST payload
+					payload = map[string]interface{}{
+						"messaging_product": "whatsapp",
+						"to":                phoneNumber,
+						"type":              "template",
+						"template": map[string]interface{}{
+							"name": "vib_average",
+							"language": map[string]string{
+								"code": "pt_BR",
+							},
+							"components": []map[string]interface{}{
+								{
+									"type": "body",
+									"parameters": []map[string]string{
+										{"type": "text", "text": messageText},
+										{"type": "text", "text": message.MessageAlarm.Type},
+										{"type": "text", "text": message.MessageAlarm.DeviceId},
+										{"type": "text", "text": message.MessageAlarm.TriggerType},
+										{"type": "text", "text": triggerAt},
+										{"type": "text", "text": message.CurrentValue},
+										{"type": "text", "text": message.MessageAlarm.Trigger},
 									},
 								},
 							},

@@ -26,5 +26,5 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           push: true
-          tags: rogeriocassares/smartcampusmaua-alerts-whatsapp:0.19
+          tags: rogeriocassares/smartcampusmaua-alerts-whatsapp:0.20
 
