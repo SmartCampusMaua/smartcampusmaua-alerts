@@ -1482,10 +1482,6 @@ func main() {
 																<td style="padding: 10px;">%s</td>
 														</tr>
 														<tr style="border-bottom: 1px solid #ddd;">
-																<td style="padding: 10px; font-weight: bold; color: #333;">Local:</td>
-																<td style="padding: 10px;">%s</td>
-														</tr>
-														<tr style="border-bottom: 1px solid #ddd;">
 																<td style="padding: 10px; font-weight: bold; color: #333;">Tipo de alarme:</td>
 																<td style="padding: 10px;">%s</td>
 														</tr>
@@ -1509,7 +1505,7 @@ func main() {
 									</div>
 								</body>
 							</html>
-					`, messageText, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.TriggerType, triggerAt, message.CurrentValue, message.MessageAlarm.Trigger)
+					`, messageText, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.TriggerType, message.CurrentValue, message.MessageAlarm.Trigger)
 
 					emailMessage.SetBody("text/html", emailBody)
 				} else if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso" {
