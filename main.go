@@ -1675,7 +1675,8 @@ func main() {
 				// Set up the SMTP dialer
 				password := os.Getenv("password")
 				dialer := gomail.NewDialer("smtp.office365.com", 587, sender, password)
-
+				dialer.Timeout = 60 * time.Second
+				
 				// Send the email
 				if err := dialer.DialAndSend(emailMessage); err != nil {
 					fmt.Println("Error:", err)
