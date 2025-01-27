@@ -15,6 +15,9 @@ import (
 	"net/http"
 	"time"
 
+	// smpt
+	gomail "gopkg.in/mail.v2"
+
 	_ "github.com/lib/pq"
 )
 
@@ -666,9 +669,9 @@ func fetchEvseStatusNotification() ([]EvseStatusNotificationData, error) {
 }
 
 type VibrationAverageFields struct {
-	BoardVoltage   		float64 `json:"boardVoltage"`
-	Humidity       		float64 `json:"humidity"`
-	Temperature    		float64 `json:"temperature"`
+	BoardVoltage      float64 `json:"boardVoltage"`
+	Humidity          float64 `json:"humidity"`
+	Temperature       float64 `json:"temperature"`
 	VibrationAverageX float64 `json:"vibrationAverageX"`
 	VibrationAverageY float64 `json:"vibrationAverageY"`
 	VibrationAverageZ float64 `json:"vibrationAverageZ"`
@@ -676,9 +679,9 @@ type VibrationAverageFields struct {
 
 type VibrationAverageData struct {
 	Fields    VibrationAverageFields `json:"fields"`
-	Name      string           `json:"name"`
-	Tags      Tags             `json:"tags"`
-	Timestamp float64          `json:"timestamp"`
+	Name      string                 `json:"name"`
+	Tags      Tags                   `json:"tags"`
+	Timestamp float64                `json:"timestamp"`
 }
 
 func fetchVibrationAverage() ([]VibrationAverageData, error) {
@@ -753,7 +756,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 		return nil, nil, fmt.Errorf("error connecting to the database: %v", err)
 	}
 
-	userQuery := `SELECT "id", "phone" FROM "User"`
+	userQuery := `SELECT "id", "email", "phone" FROM "User"`
 
 	userRows, err := db.Query(userQuery)
 	if err != nil {
@@ -765,7 +768,7 @@ func fetchUsers() ([]UserData, []Alarm, error) {
 	for userRows.Next() {
 		var loc UserData
 
-		err := userRows.Scan(&loc.Id, &loc.Phone)
+		err := userRows.Scan(&loc.Id, &loc.Email, &loc.Phone)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error scanning user row: %v", err)
 		}
@@ -822,6 +825,7 @@ func updateAlarmAlreadyPlayedOnSupabase(messages []Message) {
 type UserData struct {
 	Id     int64  `json:"id"`
 	Phone  string `json:"phone"`
+	Email  string `json:"email"`
 	Alarms Alarm
 }
 
@@ -843,6 +847,7 @@ type Message struct {
 	MessageAlarm Alarm
 	Phone        string
 	CurrentValue string
+	Email        string
 }
 
 func AlarmMessages() []Message {
@@ -921,9 +926,9 @@ func AlarmMessages() []Message {
 				alarm.AlreadyPlayed = false
 				db.Exec(`UPDATE "Alarms" SET "alreadyPlayed" = $1 WHERE "id" = $2`, alarm.AlreadyPlayed, alarm.Id)
 			}
-			if !alarm.AlreadyPlayed && item.Phone != "" && item.Id == int64(alarm.UserId) {
+			if !alarm.AlreadyPlayed && item.Phone != "" && item.Id == int64(alarm.UserId) && item.Email != "" {
 				db.Exec(`UPDATE "Alarms" SET "lastPlayed" = $1 WHERE "id" = $2`, timeNow, alarm.Id)
-				messages = append(messages, Message{MessageAlarm: alarm, Phone: item.Phone})
+				messages = append(messages, Message{MessageAlarm: alarm, Phone: item.Phone, Email: item.Email})
 			}
 		}
 	}
@@ -1318,6 +1323,18 @@ func main() {
 	tickerTimeEnv := os.Getenv("TICKER_TIME")
 	tickerTime, _ := strconv.Atoi(tickerTimeEnv)
 	ticker := time.NewTicker(time.Duration(tickerTime) * time.Second)
+
+	////smpt
+
+	// Create a new emailMessage
+	emailMessage := gomail.NewMessage()
+	// Set email headers
+	sender := os.Getenv("sender")
+	emailMessage.SetHeader("From", sender)
+	emailMessage.SetHeader("Subject", "Alerta SmartCampus")
+
+	////
+
 	for {
 		select {
 		case <-ticker.C:
@@ -1333,6 +1350,7 @@ func main() {
 
 			for _, message := range messages {
 				phoneNumber := "55" + message.Phone
+				emailMessage.SetHeader("To", message.Email)
 				var payload map[string]interface{}
 
 				if message.MessageAlarm.Type == "Evse" {
@@ -1358,6 +1376,46 @@ func main() {
 							},
 						},
 					}
+					// Set email body
+					emailBody := fmt.Sprintf(`
+							<html>
+								<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; background-color: #f9f9f9; padding: 20px;">
+									<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+										<div style="background-color: #2c3e50; color: #ffffff; padding: 15px; text-align: center;">
+												<h1 style="margin: 0; font-size: 26px;">Alerta SmartCampus Mauá</h1>
+										</div>
+										<div style="padding: 25px;">
+												<p style="font-size: 16px;">Prezado(a) Usuário(a),</p>
+												<p style="font-size: 16px;">Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:</p>
+												<p><strong>CARREGADOR EVSE LIVRE PARA USO</strong></p>
+												<table style="margin-top: 20px; border-collapse: collapse; font-size: 16px;">
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Tipo:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Device ID:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Local:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+												</table>
+												<p style="font-size: 16px; margin-top: 20px;">Por favor, tome as devidas providências o mais breve possível.</p>
+												<p style="font-size: 16px;">Caso tenha dúvidas, entre em contato conosco.</p>
+
+												<p style="font-size: 16px; margin-top: 30px;">Atenciosamente,</p>
+												<p style="font-size: 16px;"><strong>Equipe SmartCampus Mauá</strong></p>
+											</div>
+										</div>
+									</div>
+								</body>
+						</html>
+					`, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.Local)
+
+					emailMessage.SetBody("text/html", emailBody)
+
 				} else if message.MessageAlarm.Type == "VibrationAverage" {
 					var triggerAt string
 					if message.MessageAlarm.TriggerAt == "higher" {
@@ -1366,14 +1424,14 @@ func main() {
 						triggerAt = "abaixo"
 					}
 					var messageText string
-					if (message.MessageAlarm.TriggerType == "vibrationAverageX") {
-						messageText = "FREADA/ACELERAÇÃO BRUSCA";
-					} else if (message.MessageAlarm.TriggerType == "vibrationAverageY"){
-						messageText = "DIREÇÃO PERIGOSA";
-					}	else if (message.MessageAlarm.TriggerType == "vibrationAverageZ"){
-						messageText = "VIA COM BURACO";
-					}	else {
-						messageText = "SENSOR";
+					if message.MessageAlarm.TriggerType == "vibrationAverageX" {
+						messageText = "FREADA/ACELERAÇÃO BRUSCA"
+					} else if message.MessageAlarm.TriggerType == "vibrationAverageY" {
+						messageText = "DIREÇÃO PERIGOSA"
+					} else if message.MessageAlarm.TriggerType == "vibrationAverageZ" {
+						messageText = "VIA COM BURACO"
+					} else {
+						messageText = "SENSOR"
 					}
 					// POST payload
 					payload = map[string]interface{}{
@@ -1401,6 +1459,55 @@ func main() {
 							},
 						},
 					}
+					// Set email body
+					emailBody := fmt.Sprintf(`
+							<html>
+								<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; background-color: #f9f9f9; padding: 20px;">
+									<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+										<div style="background-color: #2c3e50; color: #ffffff; padding: 15px; text-align: center;">
+												<h1 style="margin: 0; font-size: 26px;">Alerta SmartCampus Mauá</h1>
+										</div>
+											<div style="padding: 25px;">
+												<p style="font-size: 16px;">Prezado(a) Usuário(a),</p>
+												<p style="font-size: 16px;">Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:</p>
+												<p><strong>VIBRATION AVERAGE</strong></p>
+												<p><strong>AVISO: %s</strong></p>
+												<table style="margin-top: 20px; border-collapse: collapse; font-size: 16px;">
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Tipo:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Device ID:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Tipo de alarme:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Valor Atual:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr>
+																<td style="padding: 10px; font-weight: bold; color: #333;">Limite Definido:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+												</table>
+
+												<p style="font-size: 16px; margin-top: 20px;">Por favor, tome as devidas providências o mais breve possível.</p>
+												<p style="font-size: 16px;">Caso tenha dúvidas, entre em contato conosco.</p>
+
+												<p style="font-size: 16px; margin-top: 30px;">Atenciosamente,</p>
+												<p style="font-size: 16px;"><strong>Equipe SmartCampus Mauá</strong></p>
+											</div>
+										</div>
+									</div>
+								</body>
+							</html>
+					`, messageText, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.TriggerType, message.CurrentValue, message.MessageAlarm.Trigger)
+
+					emailMessage.SetBody("text/html", emailBody)
 				} else if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso" {
 					// POST payload
 					payload = map[string]interface{}{
@@ -1427,6 +1534,57 @@ func main() {
 							},
 						},
 					}
+					// Set email body
+					emailBody := fmt.Sprintf(`
+							<html>
+								<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; background-color: #f9f9f9; padding: 20px;">
+										<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+												<div style="background-color: #2c3e50; color: #ffffff; padding: 15px; text-align: center;">
+														<h1 style="margin: 0; font-size: 26px;">Alerta SmartCampus Mauá</h1>
+												</div>
+												<div style="padding: 25px;">
+														<p style="font-size: 16px;">Prezado(a) Usuário(a),</p>
+														<p style="font-size: 16px;">Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:</p>
+
+														<table style="margin-top: 20px; border-collapse: collapse; font-size: 16px;">
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Tipo:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Device ID:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Local:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Tipo de alarme:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Valor Atual:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr>
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Limite Definido:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+														</table>
+
+														<p style="font-size: 16px; margin-top: 20px;">Por favor, tome as devidas providências o mais breve possível.</p>
+														<p style="font-size: 16px;">Caso tenha dúvidas, entre em contato conosco.</p>
+
+														<p style="font-size: 16px; margin-top: 30px;">Atenciosamente,</p>
+														<p style="font-size: 16px;"><strong>Equipe SmartCampus Mauá</strong></p>
+												</div>
+										</div>
+								</body>
+						</html>
+					`, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.Local, message.MessageAlarm.TriggerType, message.CurrentValue, message.CurrentValue)
+
+					emailMessage.SetBody("text/html", emailBody)
 				} else {
 					var triggerAt string
 					if message.MessageAlarm.TriggerAt == "higher" {
@@ -1461,6 +1619,68 @@ func main() {
 							},
 						},
 					}
+					// Set email body
+					emailBody := fmt.Sprintf(`
+							<html>
+								<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; background-color: #f9f9f9; padding: 20px;">
+										<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+												<div style="background-color: #2c3e50; color: #ffffff; padding: 15px; text-align: center;">
+														<h1 style="margin: 0; font-size: 26px;">Alerta SmartCampus Mauá</h1>
+												</div>
+												<div style="padding: 25px;">
+														<p style="font-size: 16px;">Prezado(a) Usuário(a),</p>
+														<p style="font-size: 16px;">Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:</p>
+
+														<table style="margin-top: 20px; border-collapse: collapse; font-size: 16px;">
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Tipo:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Device ID:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Local:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Tipo de alarme:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Valor Atual:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr>
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Limite Definido:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+														</table>
+
+														<p style="font-size: 16px; margin-top: 20px;">Por favor, tome as devidas providências o mais breve possível.</p>
+														<p style="font-size: 16px;">Caso tenha dúvidas, entre em contato conosco.</p>
+
+														<p style="font-size: 16px; margin-top: 30px;">Atenciosamente,</p>
+														<p style="font-size: 16px;"><strong>Equipe SmartCampus Mauá</strong></p>
+												</div>
+										</div>
+								</body>
+						</html>
+					`, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.Local, message.MessageAlarm.TriggerType, message.CurrentValue, message.MessageAlarm.Trigger)
+
+					emailMessage.SetBody("text/html", emailBody)
+				}
+
+				// Set up the SMTP dialer
+				password := os.Getenv("password")
+				dialer := gomail.NewDialer("smtp.office365.com", 587, sender, password)
+
+				// Send the email
+				if err := dialer.DialAndSend(emailMessage); err != nil {
+					fmt.Println("Error:", err)
+				} else {
+					fmt.Println("Email sent successfully!")
 				}
 
 				jsonPayload, err := json.Marshal(payload)
