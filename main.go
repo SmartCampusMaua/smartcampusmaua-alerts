@@ -1378,27 +1378,42 @@ func main() {
 					}
 					// Set email body
 					emailBody := fmt.Sprintf(`
-					Alerta SmartCampus Mauá
-
-					Prezado(a) Usuário(a),
-
-					Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:
-
-					CARREGADOR EVSE LIVRE PARA USO
-
-					Tipo: %s
-					Device ID: %s
-					Local: %s
-
-					Por favor, tome as devidas providências o mais breve possível.
-
-					Caso tenha dúvidas, entre em contato conosco.
-
-					Atenciosamente,
-					Equipe SmartCampus Mauá
+					<html>
+								<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; background-color: #f9f9f9; padding: 20px;">
+									<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+										<div style="background-color: #2c3e50; color: #ffffff; padding: 15px; text-align: center;">
+												<h1 style="margin: 0; font-size: 26px;">Alerta SmartCampus Mauá</h1>
+										</div>
+										<div style="padding: 25px;">
+												<p style="font-size: 16px;">Prezado(a) Usuário(a),</p>
+												<p style="font-size: 16px;">Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:</p>
+												<p><strong>CARREGADOR EVSE LIVRE PARA USO</strong></p>
+												<table style="margin-top: 20px; border-collapse: collapse; font-size: 16px;">
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Tipo:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Device ID:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Local:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+												</table>
+												<p style="font-size: 16px; margin-top: 20px;">Por favor, tome as devidas providências o mais breve possível.</p>
+												<p style="font-size: 16px;">Caso tenha dúvidas, entre em contato conosco.</p>
+												<p style="font-size: 16px; margin-top: 30px;">Atenciosamente,</p>
+												<p style="font-size: 16px;"><strong>Equipe SmartCampus Mauá</strong></p>
+											</div>
+										</div>
+									</div>
+								</body>
+						</html>
 					`, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.Local)
 
-					emailMessage.SetBody("text/plain", emailBody)
+					emailMessage.SetBody("text/html", emailBody)
 
 				} else if message.MessageAlarm.Type == "VibrationAverage" {
 					var triggerAt string
@@ -1445,30 +1460,51 @@ func main() {
 					}
 					// Set email body
 					emailBody := fmt.Sprintf(`
-					Alerta SmartCampus Mauá
-
-					Prezado(a) Usuário(a),
-
-					Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:
-
-					VIBRATION AVERAGE
-					AVISO: %s
-
-					Tipo: %s
-					Device ID: %s
-					Tipo de alarme: %s
-					Valor Atual: %s
-					Limite Definido: %s
-
-					Por favor, tome as devidas providências o mais breve possível.
-
-					Caso tenha dúvidas, entre em contato conosco.
-
-					Atenciosamente,
-					Equipe SmartCampus Mauá
+					<html>
+								<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; background-color: #f9f9f9; padding: 20px;">
+									<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+										<div style="background-color: #2c3e50; color: #ffffff; padding: 15px; text-align: center;">
+												<h1 style="margin: 0; font-size: 26px;">Alerta SmartCampus Mauá</h1>
+										</div>
+											<div style="padding: 25px;">
+												<p style="font-size: 16px;">Prezado(a) Usuário(a),</p>
+												<p style="font-size: 16px;">Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:</p>
+												<p><strong>VIBRATION AVERAGE</strong></p>
+												<p><strong>AVISO: %s</strong></p>
+												<table style="margin-top: 20px; border-collapse: collapse; font-size: 16px;">
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Tipo:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Device ID:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Tipo de alarme:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr style="border-bottom: 1px solid #ddd;">
+																<td style="padding: 10px; font-weight: bold; color: #333;">Valor Atual:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+														<tr>
+																<td style="padding: 10px; font-weight: bold; color: #333;">Limite Definido:</td>
+																<td style="padding: 10px;">%s</td>
+														</tr>
+												</table>
+												<p style="font-size: 16px; margin-top: 20px;">Por favor, tome as devidas providências o mais breve possível.</p>
+												<p style="font-size: 16px;">Caso tenha dúvidas, entre em contato conosco.</p>
+												<p style="font-size: 16px; margin-top: 30px;">Atenciosamente,</p>
+												<p style="font-size: 16px;"><strong>Equipe SmartCampus Mauá</strong></p>
+											</div>
+										</div>
+									</div>
+								</body>
+							</html>
 					`, messageText, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.TriggerType, message.CurrentValue, message.MessageAlarm.Trigger)
 
-					emailMessage.SetBody("text/plain", emailBody)
+					emailMessage.SetBody("text/html", emailBody)
 
 				} else if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso" {
 					// POST payload
@@ -1498,28 +1534,52 @@ func main() {
 					}
 					// Set email body
 					emailBody := fmt.Sprintf(`
-					Alerta SmartCampus Mauá
-
-					Prezado(a) Usuário(a),
-
-					Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:
-
-					Tipo: %s
-					Device ID: %s
-					Local: %s
-					Tipo de alarme: %s
-					Valor Atual: %s
-					Limite Definido: %s
-
-					Por favor, tome as devidas providências o mais breve possível.
-
-					Caso tenha dúvidas, entre em contato conosco.
-
-					Atenciosamente,
-					Equipe SmartCampus Mauá
+					<html>
+								<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; background-color: #f9f9f9; padding: 20px;">
+										<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+												<div style="background-color: #2c3e50; color: #ffffff; padding: 15px; text-align: center;">
+														<h1 style="margin: 0; font-size: 26px;">Alerta SmartCampus Mauá</h1>
+												</div>
+												<div style="padding: 25px;">
+														<p style="font-size: 16px;">Prezado(a) Usuário(a),</p>
+														<p style="font-size: 16px;">Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:</p>
+														<table style="margin-top: 20px; border-collapse: collapse; font-size: 16px;">
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Tipo:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Device ID:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Local:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Tipo de alarme:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Valor Atual:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr>
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Limite Definido:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+														</table>
+														<p style="font-size: 16px; margin-top: 20px;">Por favor, tome as devidas providências o mais breve possível.</p>
+														<p style="font-size: 16px;">Caso tenha dúvidas, entre em contato conosco.</p>
+														<p style="font-size: 16px; margin-top: 30px;">Atenciosamente,</p>
+														<p style="font-size: 16px;"><strong>Equipe SmartCampus Mauá</strong></p>
+												</div>
+										</div>
+								</body>
+						</html>
 					`, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.Local, message.MessageAlarm.TriggerType, message.CurrentValue, message.CurrentValue)
 
-					emailMessage.SetBody("text/plain", emailBody)
+					emailMessage.SetBody("text/html", emailBody)
 				} else {
 					var triggerAt string
 					if message.MessageAlarm.TriggerAt == "higher" {
@@ -1556,33 +1616,57 @@ func main() {
 					}
 					// Set email body
 					emailBody := fmt.Sprintf(`
-					Alerta SmartCampus Mauá
-
-					Prezado(a) Usuário(a),
-
-					Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:
-
-					Tipo: %s
-					Device ID: %s
-					Local: %s
-					Tipo de alarme: %s
-					Valor Atual: %s
-					Limite Definido: %s
-
-					Por favor, tome as devidas providências o mais breve possível.
-
-					Caso tenha dúvidas, entre em contato conosco.
-
-					Atenciosamente,
-					Equipe SmartCampus Mauá
+					<html>
+								<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; background-color: #f9f9f9; padding: 20px;">
+										<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+												<div style="background-color: #2c3e50; color: #ffffff; padding: 15px; text-align: center;">
+														<h1 style="margin: 0; font-size: 26px;">Alerta SmartCampus Mauá</h1>
+												</div>
+												<div style="padding: 25px;">
+														<p style="font-size: 16px;">Prezado(a) Usuário(a),</p>
+														<p style="font-size: 16px;">Informamos que um alerta foi gerado em nosso sistema. Seguem os detalhes:</p>
+														<table style="margin-top: 20px; border-collapse: collapse; font-size: 16px;">
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Tipo:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Device ID:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Local:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Tipo de alarme:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr style="border-bottom: 1px solid #ddd;">
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Valor Atual:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+																<tr>
+																		<td style="padding: 10px; font-weight: bold; color: #333;">Limite Definido:</td>
+																		<td style="padding: 10px;">%s</td>
+																</tr>
+														</table>
+														<p style="font-size: 16px; margin-top: 20px;">Por favor, tome as devidas providências o mais breve possível.</p>
+														<p style="font-size: 16px;">Caso tenha dúvidas, entre em contato conosco.</p>
+														<p style="font-size: 16px; margin-top: 30px;">Atenciosamente,</p>
+														<p style="font-size: 16px;"><strong>Equipe SmartCampus Mauá</strong></p>
+												</div>
+										</div>
+								</body>
+						</html>
 					`, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.Local, message.MessageAlarm.TriggerType, message.CurrentValue, message.MessageAlarm.Trigger)
 
-					emailMessage.SetBody("text/plain", emailBody)
+					emailMessage.SetBody("text/html", emailBody)
 				}
 
 				// Set up the SMTP dialer
 				password := os.Getenv("password")
-				dialer := gomail.NewDialer("smtp.office365.com", 587, sender, password)
+				dialer := gomail.NewDialer("smtp.outlook.com", 587, sender, password)
 				dialer.Timeout = 60 * time.Second
 
 				// Send the email
