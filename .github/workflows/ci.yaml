@@ -1,11 +1,11 @@
-name: smartcampusmaua-alerts-whatsapp-workflow
+name: smartcampusmaua-alerts-workflow
 on:
   push:
     branches:
       - develop
 jobs:
   check-application:
-    name: evse-job
+    name: build-job
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,5 +26,5 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           push: true
-          tags: rogeriocassares/smartcampusmaua-alerts-whatsapp:0.23
+          tags: smartcampusmaua/smartcampusmaua-alerts-whatsapp:0.23
 
