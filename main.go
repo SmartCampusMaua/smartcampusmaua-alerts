@@ -16,7 +16,7 @@ import (
 	"time"
 
 	// smpt
-	gomail "gopkg.in/mail.v2"
+	"net/smtp"
 
 	_ "github.com/lib/pq"
 )
@@ -35,23 +35,23 @@ type Tags struct {
 }
 
 type SmartLightFields struct {
-	BatteryVoltage float64 `json:"batteryVoltage"`
-	BoardVoltage   float64 `json:"boardVoltage"`
-	Data           string  `json:"data"`
-	FCnt           float64 `json:"fCnt"`
-	FPort          float64 `json:"fPort"`
-	Humidity       float64 `json:"humidity"`
-	Luminosity     float64 `json:"luminosity"`
-	Movement       float64 `json:"movement"`
-	RxAlt_0        float64 `json:"rxAlt_0"`
-	RxLat_0        float64 `json:"rxLat_0"`
-	RxLon_0        float64 `json:"rxLon_0"`
-	RxRssi_0       float64 `json:"rxRssi_0"`
-	RxSnr_0        float64 `json:"rxSnr_0"`
-	Temperature    float64 `json:"temperature"`
-	TxBandWidth    float64 `json:"txBandWidth"`
-	TxFrequency    float64 `json:"txFrequency"`
-	TxSpreadFactor float64 `json:"txSpreadFactor"`
+	BatteryVoltage  float64 `json:"batteryVoltage"`
+	BoardVoltage    float64 `json:"boardVoltage"`
+	Data            string  `json:"data"`
+	FCnt            float64 `json:"fCnt"`
+	FPort           float64 `json:"fPort"`
+	Humidity        float64 `json:"humidity"`
+	Luminosity      float64 `json:"luminosity"`
+	MovementCounter float64 `json:"movementCounter"`
+	RxAlt_0         float64 `json:"rxAlt_0"`
+	RxLat_0         float64 `json:"rxLat_0"`
+	RxLon_0         float64 `json:"rxLon_0"`
+	RxRssi_0        float64 `json:"rxRssi_0"`
+	RxSnr_0         float64 `json:"rxSnr_0"`
+	Temperature     float64 `json:"temperature"`
+	TxBandWidth     float64 `json:"txBandWidth"`
+	TxFrequency     float64 `json:"txFrequency"`
+	TxSpreadFactor  float64 `json:"txSpreadFactor"`
 }
 
 type SmartLightData struct {
@@ -195,7 +195,7 @@ func fetchWaterTank() ([]WaterTankData, error) {
 
 type HydrometerFields struct {
 	BoardVoltage   float64 `json:"boardVoltage"`
-	Counter        float64 `json:"counter"`
+	LitreCounter   float64 `json:"litreCounter"`
 	Data           string  `json:"data"`
 	FCnt           float64 `json:"fCnt"`
 	FPort          float64 `json:"fPort"`
@@ -616,7 +616,7 @@ type EvseStatusNotificationData struct {
 
 func fetchEvseStatusNotification() ([]EvseStatusNotificationData, error) {
 	// API URL
-	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/EVSE/StatusNotification/all?interval=57600" // 40 days
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/EVSE/StatusNotification/all?interval=43200" // 40 days
 
 	// Create a custom HTTP client that doesn't verify SSL certificates
 	client := &http.Client{
@@ -725,6 +725,90 @@ func fetchVibrationAverage() ([]VibrationAverageData, error) {
 
 	// Remove duplicates based on DeviceId
 	uniqueData := make([]VibrationAverageData, 0)
+	seenDevices := make(map[string]bool)
+
+	for _, item := range data {
+		if !seenDevices[item.Tags.DeviceId] {
+			uniqueData = append(uniqueData, item)
+			seenDevices[item.Tags.DeviceId] = true
+		}
+	}
+
+	// Return the filtered data
+	return uniqueData, nil
+}
+
+type Temperature8PointFields struct {
+	BoardVoltage   float64 `json:"boardVoltage"`
+	Data           string  `json:"data"`
+	FCnt           float64 `json:"fCnt"`
+	FPort          float64 `json:"fPort"`
+	RxAlt_0        float64 `json:"rxAlt_0"`
+	RxLat_0        float64 `json:"rxLat_0"`
+	RxLon_0        float64 `json:"rxLon_0"`
+	RxRssi_0       float64 `json:"rxRssi_0"`
+	RxSnr_0        float64 `json:"rxSnr_0"`
+	Temperature1   float64 `json:"temperature1"`
+	Temperature2   float64 `json:"temperature2"`
+	Temperature3   float64 `json:"temperature3"`
+	Temperature4   float64 `json:"temperature4"`
+	Temperature5   float64 `json:"temperature5"`
+	Temperature6   float64 `json:"temperature6"`
+	Temperature7   float64 `json:"temperature7"`
+	Temperature8   float64 `json:"temperature8"`
+	TxBandWidth    float64 `json:"txBandWidth"`
+	TxFrequency    float64 `json:"txFrequency"`
+	TxSpreadFactor float64 `json:"txSpreadFactor"`
+}
+
+type Temperature8PointData struct {
+	Fields    Temperature8PointFields `json:"fields"`
+	Name      string                  `json:"name"`
+	Tags      Tags                    `json:"tags"`
+	Timestamp float64                 `json:"timestamp"`
+}
+
+func fetchTemperature8Point() ([]Temperature8PointData, error) {
+	// API URL
+	apiUrl := "https://smartcampus-k8s.maua.br/api/timeseries/v0.3/IMT/LNS/Temperature8Point/all?interval=30"
+
+	// Create a custom HTTP client that doesn't verify SSL certificates
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Disable SSL verification
+			},
+		},
+		Timeout: 30 * time.Second, // Optional timeout for the request
+	}
+
+	// Make the HTTP GET request
+	response, err := client.Get(apiUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check for successful HTTP response status
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	}
+
+	// Read the response body
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Parse the JSON response into a slice of Temperature8PointData (since the response is an array)
+	var data []Temperature8PointData
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	// Remove duplicates based on DeviceId
+	uniqueData := make([]Temperature8PointData, 0)
 	seenDevices := make(map[string]bool)
 
 	for _, item := range data {
@@ -903,6 +987,10 @@ func AlarmMessages() []Message {
 	if err != nil {
 		log.Fatalf("Error fetching vibrationAverage data: %v", err)
 	}
+	temperature8PointData, err := fetchTemperature8Point()
+	if err != nil {
+		log.Fatalf("Error fetching temperature8Point data: %v", err)
+	}
 
 	userData, Alarms, userError := fetchUsers()
 	if userError != nil {
@@ -973,9 +1061,9 @@ func AlarmMessages() []Message {
 					{
 						currentValue = &dataToPass.Fields.Luminosity
 					}
-				case "movement":
+				case "movementCounter":
 					{
-						currentValue = &dataToPass.Fields.Movement
+						currentValue = &dataToPass.Fields.MovementCounter
 					}
 				case "temperature":
 					{
@@ -1029,9 +1117,9 @@ func AlarmMessages() []Message {
 					{
 						currentValue = &dataToPass.Fields.BoardVoltage
 					}
-				case "counter":
+				case "litreCounter":
 					{
-						currentValue = &dataToPass.Fields.Counter
+						currentValue = &dataToPass.Fields.LitreCounter
 					}
 				}
 				if triggerAt == "higher" && trigger < *currentValue {
@@ -1284,6 +1372,59 @@ func AlarmMessages() []Message {
 					canAddToMessages = true
 				}
 			}
+		case "Temperature8Point":
+			{
+				var dataToPass Temperature8PointData
+				for _, temperature8Point := range temperature8PointData {
+					if temperature8Point.Tags.DeviceId == deviceId {
+						dataToPass = temperature8Point
+					}
+				}
+
+				switch dataTriggerType {
+				case "boardVoltage":
+					{
+						currentValue = &dataToPass.Fields.BoardVoltage
+					}
+				case "temperature1":
+					{
+						currentValue = &dataToPass.Fields.Temperature1
+					}
+				case "temperature2":
+					{
+						currentValue = &dataToPass.Fields.Temperature2
+					}
+				case "temperature3":
+					{
+						currentValue = &dataToPass.Fields.Temperature3
+					}
+				case "temperature4":
+					{
+						currentValue = &dataToPass.Fields.Temperature4
+					}
+				case "temperature5":
+					{
+						currentValue = &dataToPass.Fields.Temperature5
+					}
+				case "temperature6":
+					{
+						currentValue = &dataToPass.Fields.Temperature6
+					}
+				case "temperature7":
+					{
+						currentValue = &dataToPass.Fields.Temperature7
+					}
+				case "temperature8":
+					{
+						currentValue = &dataToPass.Fields.Temperature8
+					}
+				}
+				if triggerAt == "higher" && trigger < *currentValue {
+					canAddToMessages = true
+				} else if triggerAt == "lower" && trigger > *currentValue {
+					canAddToMessages = true
+				}
+			}
 		}
 
 		if canAddToMessages {
@@ -1326,12 +1467,11 @@ func main() {
 
 	////smpt
 
-	// Create a new emailMessage
-	emailMessage := gomail.NewMessage()
-	// Set email headers
+	// Get environment variables
 	sender := os.Getenv("sender")
-	emailMessage.SetHeader("From", sender)
-	emailMessage.SetHeader("Subject", "Alerta SmartCampus")
+	password := os.Getenv("password")
+	smtpHost := "smtp.office365.com"
+	smtpPort := "587"
 
 	////
 
@@ -1350,7 +1490,7 @@ func main() {
 
 			for _, message := range messages {
 				phoneNumber := "55" + message.Phone
-				emailMessage.SetHeader("To", message.Email)
+				receiver := message.Email
 				var payload map[string]interface{}
 
 				if message.MessageAlarm.Type == "Evse" {
@@ -1398,8 +1538,22 @@ func main() {
 					Equipe SmartCampus Mauá
 					`, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.Local)
 
-					emailMessage.SetBody("text/plain", emailBody)
+					// Set up the message
+					subject := "Alerta SmartCampus"
+					body := "Subject: " + subject + "\r\n" + "From: " + sender + "\r\n" + "To: " + receiver + "\r\n" + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + emailBody
 
+					// Set up SMTP client
+					auth := smtp.PlainAuth("", sender, password, smtpHost)
+
+					// Send email
+					to := []string{receiver}
+					err := smtp.SendMail(smtpHost+":"+smtpPort, auth, sender, to, []byte(body))
+
+					if err != nil {
+						fmt.Println("Error:", err)
+					} else {
+						fmt.Println("Email sent successfully!")
+					}
 				} else if message.MessageAlarm.Type == "VibrationAverage" {
 					var triggerAt string
 					if message.MessageAlarm.TriggerAt == "higher" {
@@ -1468,8 +1622,21 @@ func main() {
 					Equipe SmartCampus Mauá
 					`, messageText, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.TriggerType, message.CurrentValue, message.MessageAlarm.Trigger)
 
-					emailMessage.SetBody("text/plain", emailBody)
+					// Set up the message
+					subject := "Alerta SmartCampus"
+					body := "Subject: " + subject + "\r\n" + "From: " + sender + "\r\n" + "To: " + receiver + "\r\n" + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + emailBody
 
+					// Set up SMTP client
+					auth := smtp.PlainAuth("", sender, password, smtpHost)
+
+					// Send email
+					to := []string{receiver}
+					err := smtp.SendMail(smtpHost+":"+smtpPort, auth, sender, to, []byte(body))
+					if err != nil {
+						fmt.Println("Error:", err)
+					} else {
+						fmt.Println("Email sent successfully!")
+					}
 				} else if message.CurrentValue == "Verdadeiro" || message.CurrentValue == "Falso" {
 					// POST payload
 					payload = map[string]interface{}{
@@ -1519,7 +1686,21 @@ func main() {
 					Equipe SmartCampus Mauá
 					`, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.Local, message.MessageAlarm.TriggerType, message.CurrentValue, message.CurrentValue)
 
-					emailMessage.SetBody("text/plain", emailBody)
+					// Set up the message
+					subject := "Alerta SmartCampus"
+					body := "Subject: " + subject + "\r\n" + "From: " + sender + "\r\n" + "To: " + receiver + "\r\n" + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + emailBody
+
+					// Set up SMTP client
+					auth := smtp.PlainAuth("", sender, password, smtpHost)
+
+					// Send email
+					to := []string{receiver}
+					err := smtp.SendMail(smtpHost+":"+smtpPort, auth, sender, to, []byte(body))
+					if err != nil {
+						fmt.Println("Error:", err)
+					} else {
+						fmt.Println("Email sent successfully!")
+					}
 				} else {
 					var triggerAt string
 					if message.MessageAlarm.TriggerAt == "higher" {
@@ -1577,19 +1758,21 @@ func main() {
 					Equipe SmartCampus Mauá
 					`, message.MessageAlarm.Type, message.MessageAlarm.DeviceId, message.MessageAlarm.Local, message.MessageAlarm.TriggerType, message.CurrentValue, message.MessageAlarm.Trigger)
 
-					emailMessage.SetBody("text/plain", emailBody)
-				}
+					// Set up the message
+					subject := "Alerta SmartCampus"
+					body := "Subject: " + subject + "\r\n" + "From: " + sender + "\r\n" + "To: " + receiver + "\r\n" + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + emailBody
 
-				// Set up the SMTP dialer
-				password := os.Getenv("password")
-				dialer := gomail.NewDialer("smtp.office365.com", 587, sender, password)
-				dialer.Timeout = 60 * time.Second
+					// Set up SMTP client
+					auth := smtp.PlainAuth("", sender, password, smtpHost)
 
-				// Send the email
-				if err := dialer.DialAndSend(emailMessage); err != nil {
-					fmt.Println("Error:", err)
-				} else {
-					fmt.Println("Email sent successfully!")
+					// Send email
+					to := []string{receiver}
+					err := smtp.SendMail(smtpHost+":"+smtpPort, auth, sender, to, []byte(body))
+					if err != nil {
+						fmt.Println("Error:", err)
+					} else {
+						fmt.Println("Email sent successfully!")
+					}
 				}
 
 				jsonPayload, err := json.Marshal(payload)
