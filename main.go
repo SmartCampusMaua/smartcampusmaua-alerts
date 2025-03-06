@@ -1470,7 +1470,7 @@ func main() {
 	// Get environment variables
 	sender := os.Getenv("sender")
 	password := os.Getenv("password")
-	smtpHost := "smtp.office365.com"
+	smtpHost := "smtp.maua.br"
 	smtpPort := "587"
 
 	////
@@ -1543,11 +1543,13 @@ func main() {
 					body := "Subject: " + subject + "\r\n" + "From: " + sender + "\r\n" + "To: " + receiver + "\r\n" + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + emailBody
 
 					// Set up SMTP client
-					auth := smtp.PlainAuth("", sender, password, smtpHost)
+					// auth := smtp.PlainAuth("", sender, password, smtpHost)
+					smtp.PlainAuth("", sender, password, smtpHost)
 
 					// Send email
 					to := []string{receiver}
-					err := smtp.SendMail(smtpHost+":"+smtpPort, auth, sender, to, []byte(body))
+					// err := smtp.SendMail(smtpHost+":"+smtpPort, auth, sender, to, []byte(body))
+					err := smtp.SendMail(smtpHost+":"+smtpPort, nil, sender, to, []byte(body))
 
 					if err != nil {
 						fmt.Println("Error:", err)
@@ -1627,11 +1629,14 @@ func main() {
 					body := "Subject: " + subject + "\r\n" + "From: " + sender + "\r\n" + "To: " + receiver + "\r\n" + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + emailBody
 
 					// Set up SMTP client
-					auth := smtp.PlainAuth("", sender, password, smtpHost)
+					// auth := smtp.PlainAuth("", sender, password, smtpHost)
+          smtp.PlainAuth("", sender, password, smtpHost)
 
 					// Send email
 					to := []string{receiver}
-					err := smtp.SendMail(smtpHost+":"+smtpPort, auth, sender, to, []byte(body))
+					// err := smtp.SendMail(smtpHost+":"+smtpPort, auth, sender, to, []byte(body))
+					err := smtp.SendMail(smtpHost+":"+smtpPort, nil, sender, to, []byte(body))
+
 					if err != nil {
 						fmt.Println("Error:", err)
 					} else {
@@ -1691,11 +1696,12 @@ func main() {
 					body := "Subject: " + subject + "\r\n" + "From: " + sender + "\r\n" + "To: " + receiver + "\r\n" + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + emailBody
 
 					// Set up SMTP client
-					auth := smtp.PlainAuth("", sender, password, smtpHost)
+					// auth := smtp.PlainAuth("", sender, password, smtpHost)
+          smtp.PlainAuth("", sender, password, smtpHost)
 
 					// Send email
 					to := []string{receiver}
-					err := smtp.SendMail(smtpHost+":"+smtpPort, auth, sender, to, []byte(body))
+					err := smtp.SendMail(smtpHost+":"+smtpPort, nil, sender, to, []byte(body))
 					if err != nil {
 						fmt.Println("Error:", err)
 					} else {
@@ -1763,11 +1769,12 @@ func main() {
 					body := "Subject: " + subject + "\r\n" + "From: " + sender + "\r\n" + "To: " + receiver + "\r\n" + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + emailBody
 
 					// Set up SMTP client
-					auth := smtp.PlainAuth("", sender, password, smtpHost)
+					// auth := smtp.PlainAuth("", sender, password, smtpHost)
+          smtp.PlainAuth("", sender, password, smtpHost)
 
 					// Send email
 					to := []string{receiver}
-					err := smtp.SendMail(smtpHost+":"+smtpPort, auth, sender, to, []byte(body))
+					err := smtp.SendMail(smtpHost+":"+smtpPort, nil, sender, to, []byte(body))
 					if err != nil {
 						fmt.Println("Error:", err)
 					} else {
